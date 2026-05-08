@@ -9,6 +9,10 @@ dist/
 # pytest
 .pytest_cache/
 
+# uv
+.uv/
+.python-version
+
 # Editors / OS
 .vscode/
 .idea/

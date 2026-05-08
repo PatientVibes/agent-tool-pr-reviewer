@@ -6,7 +6,7 @@ authors = [{ name = "Chris Moore", email = "chris.paul.moore@gmail.com" }]
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.7,<3",
-    "pydantic-ai>=0.0.40,<1.0",
+    "pydantic-ai>=0.8,<0.9",
     "pyyaml>=6.0,<7",
 ]
 
