@@ -6,7 +6,11 @@ authors = [{ name = "Chris Moore", email = "chris.paul.moore@gmail.com" }]
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.7,<3",
-    "pydantic-ai>=0.8,<0.9",
+    "pydantic-ai-slim[anthropic]>=0.8,<0.9",
+    # anthropic 0.100.0+ removed types pydantic-ai 0.8.x still imports
+    # (UserLocation from anthropic.types.beta.beta_web_search_tool_20250305_param).
+    # Pin below 0.70 until pydantic-ai catches up.
+    "anthropic>=0.61,<0.70",
     "pyyaml>=6.0,<7",
 ]
 
