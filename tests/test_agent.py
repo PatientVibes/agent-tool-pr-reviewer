@@ -7,17 +7,13 @@ from pr_reviewer.schema import Finding, Report, RunMetadata
 
 def _stub_test_model(report_dict: dict) -> TestModel:
     """Build a TestModel that yields report_dict as the structured output.
-    Pydantic AI has used both `custom_output_args` and `custom_result_args` for
-    this kwarg across versions — try both before failing."""
-    for kwarg in ("custom_output_args", "custom_result_args"):
-        try:
-            return TestModel(**{kwarg: report_dict})
-        except TypeError:
-            continue
-    raise RuntimeError(
-        "TestModel does not accept custom_output_args or custom_result_args. "
-        "Check the installed pydantic-ai version's TestModel signature."
-    )
+
+    Pydantic AI 0.8.x uses `custom_output_args`. Older versions used
+    `custom_result_args`. We pin to the current name; if a future version
+    renames again, the TypeError surfaces clearly at the call site rather
+    than being silently masked by a fallback loop.
+    """
+    return TestModel(custom_output_args=report_dict)
 
 
 @pytest.mark.asyncio
