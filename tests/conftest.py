@@ -38,10 +38,15 @@ def _run(cmd: list[str], cwd: Path) -> None:
 
 @pytest.fixture
 def tmp_git_repo(tmp_path: Path) -> Path:
-    """Initializes a git repo with one commit on `main`. Configures user identity."""
+    """Initializes a git repo with one commit on `main`. Configures user identity.
+
+    Uses `git init` + `symbolic-ref HEAD` rather than `git init -b main` so
+    the fixture works on Git < 2.28 (where -b is unsupported).
+    """
     repo = tmp_path / "repo"
     repo.mkdir()
-    _run(["git", "init", "-b", "main"], repo)
+    _run(["git", "init"], repo)
+    _run(["git", "symbolic-ref", "HEAD", "refs/heads/main"], repo)
     _run(["git", "config", "user.email", "test@example.com"], repo)
     _run(["git", "config", "user.name", "Test"], repo)
     (repo / "README.md").write_text("seed\n", encoding="utf-8")
