@@ -84,6 +84,25 @@ async def test_review_returns_2_on_malformed_rule(
     assert "frontmatter" in err.lower()
 
 
+@pytest.mark.asyncio
+async def test_review_returns_1_when_blocker_present(
+    tmp_git_repo: Path, make_branch_with_change, monkeypatch
+):
+    make_branch_with_change("feature/x", "x.py", "print('x')\n")
+    monkeypatch.chdir(tmp_git_repo)
+    report_dict = _empty_report_dict()
+    report_dict["findings"] = [{
+        "category": "bug", "severity": "blocker",
+        "file": "x.py", "line_start": 1, "line_end": 1,
+        "title": "stub", "description": "stub blocker",
+    }]
+    exit_code = await run_review_command(
+        base=None, budget=80000, rules_dir=None, out=None,
+        model=_stub_test_model(report_dict),
+    )
+    assert exit_code == 1
+
+
 def test_rules_list_prints_discovered_rules(tmp_git_repo: Path, monkeypatch, capsys):
     rules_dir = tmp_git_repo / ".ai-review"
     rules_dir.mkdir()
