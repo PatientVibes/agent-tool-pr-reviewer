@@ -55,3 +55,13 @@ def test_merge_base_matches_main_when_branch_is_descendant(tmp_git_repo: Path, m
 def test_current_branch_after_checkout(tmp_git_repo: Path, make_branch_with_change):
     make_branch_with_change("feature/x", "f.py", "x\n")
     assert current_branch(tmp_git_repo) == "feature/x"
+
+
+def test_extract_diff_handles_utf8_content(tmp_git_repo: Path, make_branch_with_change):
+    # Em-dashes, smart quotes, and emoji exercise the cp1252 fallback bug
+    # that bites Windows users when subprocess defaults to the OS code page.
+    make_branch_with_change("feature/utf8", "doc.md", "Hello — “world” \U0001F30D\n")
+    diff = extract_diff(tmp_git_repo, base="main")
+    assert "—" in diff      # em-dash
+    assert "“" in diff      # left smart quote
+    assert "\U0001F30D" in diff  # earth-globe emoji

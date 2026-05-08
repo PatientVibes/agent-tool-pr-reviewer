@@ -11,8 +11,17 @@ class BaseRefError(GitError):
 
 
 def _git(repo: Path, *args: str) -> str:
+    # encoding="utf-8" is required on Windows. Without it, subprocess defaults
+    # to the OS code page (cp1252), which crashes on UTF-8 output like em-dashes
+    # in commit messages or diff content. errors="replace" keeps a single bad
+    # byte from killing the whole review.
     result = subprocess.run(
-        ["git", *args], cwd=repo, capture_output=True, text=True,
+        ["git", *args],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
     )
     if result.returncode != 0:
         raise GitError(f"git {' '.join(args)} failed: {result.stderr.strip()}")
