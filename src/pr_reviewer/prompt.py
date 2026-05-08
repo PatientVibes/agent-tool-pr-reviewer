@@ -27,7 +27,7 @@ Do NOT emit findings for any of these. They are handled by other tools or are in
 
 - `blocker`: would cause data loss, an outage, a failed deploy, or violate a rule the user has labeled as blocking.
 - `high`: a correctness defect or rule violation that should block merge under normal review.
-- `medium`: a defect under uncommon conditions or a stylistic-but-named rule violation.
+- `medium`: a defect under uncommon conditions, or a `project_rule` violation that does not meet the `high` bar.
 - `low`: minor issue worth flagging but not blocking.
 
 # Constraints
@@ -49,6 +49,11 @@ def build_user_prompt(
     commit_head: str,
     commit_base: str,
 ) -> str:
+    # Note: rule bodies are dropped into the prompt verbatim. Author-supplied
+    # markdown headings like `## Diff` inside a rule body would shadow the real
+    # diff section heading. Rules are user-authored and trusted; we don't
+    # sanitize. If untrusted rule sources are ever added, escape or namespace
+    # rule-body headings before joining.
     parts: list[str] = []
 
     if rules:
