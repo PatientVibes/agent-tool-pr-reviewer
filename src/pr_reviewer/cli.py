@@ -95,6 +95,9 @@ async def run_review_command(
         tokens_input=getattr(usage, "input_tokens", 0) or 0,
         tokens_output=getattr(usage, "output_tokens", 0) or 0,
     )
+    # rules_loaded is determined deterministically from disk, NOT trusted from
+    # the LLM. The model may hallucinate rule_ids; the CLI is the source of
+    # truth for what rules were actually available during the run.
     sealed_report = Report(
         metadata=metadata,
         rules_loaded=[r.rule_id for r in rules],
