@@ -55,5 +55,33 @@ class TestLoadRules:
         (tmp_path / ".ai-review").mkdir()
         rules_dir = tmp_path / ".ai-review"
         (rules_dir / "broken.md").write_text("no frontmatter here", encoding="utf-8")
-        with pytest.raises(ValueError, match="frontmatter"):
+        with pytest.raises(ValueError, match="missing YAML frontmatter"):
             load_rules(rules_dir)
+
+    def test_frontmatter_without_description_raises(self, tmp_path: Path):
+        (tmp_path / ".ai-review").mkdir()
+        rules_dir = tmp_path / ".ai-review"
+        (rules_dir / "no-desc.md").write_text(
+            "---\ntags: [lint]\n---\n\nbody here\n", encoding="utf-8",
+        )
+        with pytest.raises(ValueError, match="'description'"):
+            load_rules(rules_dir)
+
+    def test_non_string_description_raises(self, tmp_path: Path):
+        (tmp_path / ".ai-review").mkdir()
+        rules_dir = tmp_path / ".ai-review"
+        (rules_dir / "bad-type.md").write_text(
+            "---\ndescription:\n  - a\n  - b\n---\n\nbody\n", encoding="utf-8",
+        )
+        with pytest.raises(ValueError, match="non-empty string"):
+            load_rules(rules_dir)
+
+    def test_crlf_line_endings_handled(self, tmp_path: Path):
+        (tmp_path / ".ai-review").mkdir()
+        rules_dir = tmp_path / ".ai-review"
+        (rules_dir / "crlf.md").write_bytes(
+            b"---\r\ndescription: A description.\r\n---\r\n\r\nbody text\r\n",
+        )
+        rules = load_rules(rules_dir)
+        assert len(rules) == 1
+        assert rules[0].description == "A description."

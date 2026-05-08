@@ -37,15 +37,18 @@ def load_rules(rules_dir: Path) -> list[Rule]:
 
 
 def _parse_rule_file(path: Path) -> Rule:
-    text = path.read_text(encoding="utf-8")
+    text = path.read_text(encoding="utf-8").replace("\r\n", "\n")
     if not text.startswith("---\n"):
         raise ValueError(f"{path}: missing YAML frontmatter")
-    try:
-        _, frontmatter, body = text.split("---\n", 2)
-    except ValueError as exc:
-        raise ValueError(f"{path}: malformed frontmatter") from exc
+    parts = text.split("---\n", 2)
+    if len(parts) != 3:
+        raise ValueError(f"{path}: malformed frontmatter (missing closing '---')")
+    _, frontmatter, body = parts
     meta = yaml.safe_load(frontmatter) or {}
     description = meta.get("description")
-    if not description:
-        raise ValueError(f"{path}: missing required frontmatter field 'description'")
+    if not isinstance(description, str) or not description.strip():
+        raise ValueError(
+            f"{path}: missing or invalid required frontmatter field 'description' "
+            "(must be a non-empty string)"
+        )
     return Rule(rule_id=path.stem, description=description.strip(), body=body.lstrip("\n"))
