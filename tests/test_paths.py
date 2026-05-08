@@ -1,5 +1,7 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+import pytest
 
 from pr_reviewer.paths import run_dir_name, prepare_run_dir, write_latest_pointer
 
@@ -12,6 +14,16 @@ class TestRunDirName:
     def test_strips_microseconds(self):
         ts = datetime(2026, 5, 7, 14, 32, 19, 123456, tzinfo=timezone.utc)
         assert run_dir_name(ts) == "2026-05-07T14-32-19Z"
+
+    def test_naive_datetime_rejected(self):
+        ts = datetime(2026, 5, 7, 14, 32, 19)
+        with pytest.raises(ValueError, match="UTC-aware"):
+            run_dir_name(ts)
+
+    def test_non_utc_offset_rejected(self):
+        ts = datetime(2026, 5, 7, 14, 32, 19, tzinfo=timezone(timedelta(hours=5, minutes=30)))
+        with pytest.raises(ValueError, match="UTC"):
+            run_dir_name(ts)
 
 
 class TestPrepareRunDir:

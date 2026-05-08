@@ -3,7 +3,16 @@ from pathlib import Path
 
 
 def run_dir_name(started_at: datetime) -> str:
-    """ISO 8601 UTC, no microseconds, Windows-safe (`:` -> `-`)."""
+    """ISO 8601 UTC, no microseconds, Windows-safe (`:` -> `-`).
+
+    Rejects naive and non-UTC datetimes — silently producing a non-UTC
+    name (or a `+05:30` segment that is invalid as a Windows path) is worse
+    than failing fast.
+    """
+    if started_at.tzinfo is None or started_at.utcoffset() is None:
+        raise ValueError("started_at must be a UTC-aware datetime")
+    if started_at.utcoffset().total_seconds() != 0:
+        raise ValueError("started_at must be UTC (offset == 0)")
     iso = started_at.replace(microsecond=0).isoformat()
     if iso.endswith("+00:00"):
         iso = iso[:-6] + "Z"
