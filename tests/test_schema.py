@@ -58,6 +58,18 @@ class TestFinding:
                 description="d",
             )
 
+    def test_line_end_before_line_start_raises(self):
+        with pytest.raises(ValidationError, match="line_end must be >= line_start"):
+            Finding(
+                category="bug",
+                severity="low",
+                file="x.py",
+                line_start=10,
+                line_end=5,
+                title="t",
+                description="d",
+            )
+
 
 class TestReport:
     def test_round_trip_through_json(self):
