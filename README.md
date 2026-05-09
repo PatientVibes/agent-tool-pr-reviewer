@@ -51,7 +51,7 @@ git diff --merge-base   →   .ai-review/*.md   →   single Pydantic AI call   
                                                             findings.json + review-output.md
 ```
 
-Deterministic everywhere except the one LLM call. The schema is the contract — every finding has a stable `category` (`bug` or `project_rule`), a `severity` (`blocker | high | medium | low`), a file/line range, and (for `project_rule`) a `rule_id` matching the `.md` filename of the violated rule.
+Deterministic everywhere except the one LLM call. The schema is the contract — every finding has a stable `category` (`bug` or `project_rule`), a `severity` (`blocker | high | medium | low`), a file/line range, an `evidence` quote (verbatim diff lines, 1–500 chars), and (for `project_rule`) a `rule_id` matching the `.md` filename of the violated rule.
 
 See `D:/ai-agents/docs/superpowers/specs/2026-05-07-agent-tool-pr-reviewer-design.md` for full design rationale.
 
@@ -144,6 +144,12 @@ A single `OPENROUTER_API_KEY` covers all of them. The model name shows up in `fi
 **`error: Could not determine base ref. Pass --base <ref> explicitly.`** Your repo has no `origin/HEAD`, no `main`, and no `master` branch. Pass `--base <whatever-your-default-is>`.
 
 **`error: prompt exceeds --budget N tokens.`** The diff is too big. Either split the PR, or pass `--budget` with a higher value if you trust your model's context window.
+
+## Calibration notes
+
+**Phase-1 trial (2026-05-08, v0.1.0)**: 4 models (Claude Sonnet 4.6, GPT-5, Gemini 2.5 Pro, DeepSeek V3.1) via OpenRouter on a single Docker/Flyway diff in chorus-sqlserver. 4 findings, 0 true positives. Two failure modes named: external-tool-hallucination (GPT-5 confidently flagged a valid `sqlcmd -No` flag as invalid) and speculative-downstream-consequences (GPT-5 chained "X fails → Y fails → Z blocked" without grounding). v0.2.0's required `evidence` field, system-prompt exclusions, and hedging-word guard on blockers are the targeted response.
+
+**Bug-vs-rule FP rate**: in phase-1, `bug`-category findings (no `rule_id`) had a higher false-positive rate than `project_rule` findings. The skill body's calibration note recommends surfacing the evidence quote prominently and asking the user to verify before acting on bug findings. Re-evaluate this once phase-2+ data accumulates.
 
 ## What's NOT in v1
 
