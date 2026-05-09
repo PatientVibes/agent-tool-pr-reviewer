@@ -101,6 +101,22 @@ class TestFinding:
                 evidence="x" * 501,
             )
 
+    def test_evidence_at_min_length_accepted(self):
+        f = Finding(
+            category="bug", severity="low", file="x.py",
+            line_start=1, line_end=1, title="t", description="d",
+            evidence="+",
+        )
+        assert f.evidence == "+"
+
+    def test_evidence_at_max_length_accepted(self):
+        f = Finding(
+            category="bug", severity="low", file="x.py",
+            line_start=1, line_end=1, title="t", description="d",
+            evidence="x" * 500,
+        )
+        assert len(f.evidence) == 500
+
 
 class TestReport:
     def test_round_trip_through_json(self):
