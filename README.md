@@ -13,7 +13,7 @@ uv tool install --editable D:/agent-tool-pr-reviewer
 Verify:
 
 ```bash
-agent-tool-pr-reviewer --version    # 0.2.0
+agent-tool-pr-reviewer --version    # 0.2.1
 ```
 
 The default model is `anthropic:claude-sonnet-4-6`, which expects `ANTHROPIC_API_KEY` in the environment.
