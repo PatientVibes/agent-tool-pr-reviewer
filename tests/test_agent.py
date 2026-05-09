@@ -58,3 +58,60 @@ class TestResolveModel:
         from pydantic_ai.models.openai import OpenAIChatModel
         result = resolve_model("openrouter:anthropic/claude-sonnet-4")
         assert isinstance(result, OpenAIChatModel)
+
+    def test_openrouter_returns_tolerant_subclass(self, monkeypatch):
+        """Sanity: resolve_model wires the tolerant subclass, not the bare OpenAIChatModel."""
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
+        from pr_reviewer.agent import _TolerantOpenRouterChatModel
+        result = resolve_model("openrouter:google/gemini-2.5-pro")
+        assert isinstance(result, _TolerantOpenRouterChatModel)
+
+
+class TestCoerceServiceTier:
+    """OpenRouter sometimes returns service_tier values (e.g. 'standard') that the
+    openai SDK's ChatCompletion Literal rejects, causing pydantic-ai's strict
+    re-validation in _process_response to fail. _coerce_service_tier drops the
+    offending value before re-validation."""
+
+    def test_drops_unknown_value(self):
+        from openai.types.chat import ChatCompletion
+        from pr_reviewer.agent import _coerce_service_tier
+        resp = ChatCompletion.model_construct(
+            id="x", choices=[], created=0, model="m",
+            object="chat.completion", service_tier="standard",
+        )
+        _coerce_service_tier(resp)
+        assert resp.service_tier is None
+
+    def test_preserves_allowed_values(self):
+        from openai.types.chat import ChatCompletion
+        from pr_reviewer.agent import _coerce_service_tier
+        for tier in ("auto", "default", "flex", "scale", "priority"):
+            resp = ChatCompletion.model_construct(
+                id="x", choices=[], created=0, model="m",
+                object="chat.completion", service_tier=tier,
+            )
+            _coerce_service_tier(resp)
+            assert resp.service_tier == tier, f"{tier!r} was rewritten"
+
+    def test_handles_none(self):
+        from openai.types.chat import ChatCompletion
+        from pr_reviewer.agent import _coerce_service_tier
+        resp = ChatCompletion.model_construct(
+            id="x", choices=[], created=0, model="m",
+            object="chat.completion", service_tier=None,
+        )
+        _coerce_service_tier(resp)
+        assert resp.service_tier is None
+
+    def test_dumped_response_passes_strict_validation_after_coercion(self):
+        """End-to-end: model_construct(unknown) → coerce → model_dump → strict model_validate."""
+        from openai.types.chat import ChatCompletion
+        from pr_reviewer.agent import _coerce_service_tier
+        resp = ChatCompletion.model_construct(
+            id="x", choices=[], created=0, model="m",
+            object="chat.completion", service_tier="standard",
+        )
+        _coerce_service_tier(resp)
+        # This is the exact flow pydantic-ai _process_response uses.
+        ChatCompletion.model_validate(resp.model_dump())

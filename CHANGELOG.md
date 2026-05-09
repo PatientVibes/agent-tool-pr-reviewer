@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.1 — 2026-05-09
+
+### Fixed
+
+- OpenRouter responses with `service_tier: "standard"` (or any value outside the openai SDK's `Literal["auto", "default", "flex", "scale", "priority"]`) no longer fail pydantic-ai's strict re-validation in `_process_response`. The `openrouter:*` resolver now returns a tolerant `OpenAIChatModel` subclass that drops unknown service_tier values before delegating to super. Earned by phase-2-fix gemini failing 3/3 retries on this validation; root-caused to pydantic-ai 0.8.x at `models/openai.py:471` re-validating an openai-SDK `model_construct`-built response.
+
+### Added
+
+- `_coerce_service_tier` helper + `_TolerantOpenRouterChatModel` subclass in `pr_reviewer.agent`. 5 tests covering the helper's coerce/preserve/none/end-to-end paths plus a wiring sanity check on `resolve_model`.
+
 ## 0.2.0 — 2026-05-08
 
 ### Breaking
