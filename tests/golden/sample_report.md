@@ -18,6 +18,12 @@ Rules loaded: `no-class-components`, `prefer-pure-functions`
 
 ### `src/x.py:42-42` — null deref
 
+**Evidence:**
+
+````diff
++    return user_data.name
+````
+
 **Category:** bug
 
 x may be None here.
@@ -27,6 +33,16 @@ x may be None here.
 ## High
 
 ### `src/components/X.tsx:1-20` — class component used
+
+**Evidence:**
+
+````diff
++class UserProfile extends React.Component {
++  render() {
++    return <div>...</div>;
++  }
++}
+````
 
 **Category:** project_rule (`no-class-components`)
 

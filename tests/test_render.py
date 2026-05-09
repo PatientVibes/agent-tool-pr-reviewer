@@ -52,3 +52,23 @@ def test_renders_sample_report_matches_golden():
     )
     expected = (GOLDEN_DIR / "sample_report.md").read_text(encoding="utf-8")
     assert render_markdown(report) == expected
+
+
+def test_renders_evidence_with_triple_backticks_intact():
+    """Evidence containing internal triple-backticks must not break the render's outer fence."""
+    report = Report(
+        metadata=_metadata(),
+        rules_loaded=[],
+        findings=[
+            Finding(
+                category="bug", severity="low",
+                file="docs/x.md", line_start=10, line_end=12,
+                title="bad fence",
+                description="d",
+                evidence="+```python\n+x = 1\n+```",
+            ),
+        ],
+    )
+    rendered = render_markdown(report)
+    expected_block = "````diff\n+```python\n+x = 1\n+```\n````"
+    assert expected_block in rendered, f"4-backtick wrapper broken; rendered:\n{rendered}"

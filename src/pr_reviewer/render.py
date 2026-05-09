@@ -58,6 +58,12 @@ def _render_finding(f: Finding) -> list[str]:
     out: list[str] = []
     out.append(f"### `{f.file}:{f.line_start}-{f.line_end}` — {f.title}")
     out.append("")
+    out.append("**Evidence:**")
+    out.append("")
+    out.append("````diff")
+    out.extend(f.evidence.splitlines() or [f.evidence])
+    out.append("````")
+    out.append("")
     if f.category == "project_rule":
         out.append(f"**Category:** project_rule (`{f.rule_id}`)")
     else:
