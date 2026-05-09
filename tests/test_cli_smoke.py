@@ -95,6 +95,7 @@ async def test_review_returns_1_when_blocker_present(
         "category": "bug", "severity": "blocker",
         "file": "x.py", "line_start": 1, "line_end": 1,
         "title": "stub", "description": "stub blocker",
+        "evidence": "+stub line",
     }]
     exit_code = await run_review_command(
         base=None, budget=80000, rules_dir=None, out=None,

@@ -17,6 +17,7 @@ class Finding(BaseModel):
     rule_id: str | None = None
     title: str
     description: str
+    evidence: str = Field(min_length=1, max_length=500)
     suggested_fix: str | None = None
 
     @model_validator(mode="after")
@@ -31,7 +32,7 @@ class Finding(BaseModel):
 
 
 class RunMetadata(BaseModel):
-    schema_version: Literal["1"] = "1"
+    schema_version: Literal["2"] = "2"
     branch: str
     base_ref: str
     commit_head: str

@@ -37,6 +37,7 @@ def test_renders_sample_report_matches_golden():
                 category="bug", severity="blocker",
                 file="src/x.py", line_start=42, line_end=42,
                 title="null deref", description="x may be None here.",
+                evidence="+    return user_data.name",
             ),
             Finding(
                 category="project_rule", severity="high",
@@ -45,6 +46,7 @@ def test_renders_sample_report_matches_golden():
                 title="class component used",
                 description="Convert to functional.",
                 suggested_fix="use hooks",
+                evidence="+class UserProfile extends React.Component {\n+  render() {\n+    return <div>...</div>;\n+  }\n+}",
             ),
         ],
     )

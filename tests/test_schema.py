@@ -17,6 +17,7 @@ class TestFinding:
             line_end=12,
             title="off-by-one in loop bound",
             description="loop runs N+1 times because <=",
+            evidence="+    return x.foo",
         )
         assert f.rule_id is None
 
@@ -31,6 +32,7 @@ class TestFinding:
                 rule_id="some-rule",
                 title="t",
                 description="d",
+                evidence="+    return x.foo",
             )
 
     def test_project_rule_with_rule_id_is_valid(self):
@@ -43,6 +45,7 @@ class TestFinding:
             rule_id="no-class-components",
             title="class component used",
             description="convert to functional",
+            evidence="+class X extends Component {",
         )
         assert f.rule_id == "no-class-components"
 
@@ -56,6 +59,7 @@ class TestFinding:
                 line_end=1,
                 title="t",
                 description="d",
+                evidence="+class X extends Component {",
             )
 
     def test_line_end_before_line_start_raises(self):
@@ -68,6 +72,33 @@ class TestFinding:
                 line_end=5,
                 title="t",
                 description="d",
+                evidence="+stub",
+            )
+
+    def test_evidence_empty_raises(self):
+        with pytest.raises(ValidationError):
+            Finding(
+                category="bug",
+                severity="low",
+                file="x.py",
+                line_start=1,
+                line_end=1,
+                title="t",
+                description="d",
+                evidence="",
+            )
+
+    def test_evidence_too_long_raises(self):
+        with pytest.raises(ValidationError):
+            Finding(
+                category="bug",
+                severity="low",
+                file="x.py",
+                line_start=1,
+                line_end=1,
+                title="t",
+                description="d",
+                evidence="x" * 501,
             )
 
 
@@ -95,6 +126,7 @@ class TestReport:
                     line_end=42,
                     title="null deref",
                     description="x may be None here",
+                    evidence="+    return x.foo  # could be None",
                 ),
             ],
         )
