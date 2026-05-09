@@ -13,7 +13,7 @@ uv tool install --editable D:/agent-tool-pr-reviewer
 Verify:
 
 ```bash
-agent-tool-pr-reviewer --version    # 0.1.0
+agent-tool-pr-reviewer --version    # 0.2.0
 ```
 
 The default model is `anthropic:claude-sonnet-4-6`, which expects `ANTHROPIC_API_KEY` in the environment.
@@ -175,7 +175,7 @@ uv sync --extra dev
 uv run pytest -v
 ```
 
-49 tests across 8 modules: schema, paths, rules, diff, prompt, render, agent, CLI smoke. Tests use Pydantic AI's `TestModel` for deterministic LLM stubbing.
+63 tests across 8 modules: schema, paths, rules, diff, prompt, render, agent, CLI smoke. Tests use Pydantic AI's `TestModel` for deterministic LLM stubbing.
 
 ## Architecture
 
