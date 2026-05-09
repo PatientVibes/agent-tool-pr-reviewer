@@ -61,3 +61,24 @@ def test_user_prompt_handles_empty_rules():
     )
     assert "diff" in out
     # No rules section content beyond the header (or the section is omitted entirely)
+
+
+def test_system_prompt_excludes_external_tool_syntax():
+    assert "External tool" in SYSTEM_PROMPT
+    assert "invalid flag" in SYSTEM_PROMPT
+
+
+def test_system_prompt_excludes_speculative_consequences():
+    assert "Speculative downstream" in SYSTEM_PROMPT
+    assert "extrapolation" in SYSTEM_PROMPT.lower()
+
+
+def test_system_prompt_blocker_hedging_guard():
+    for word in ("might", "may", "could", "potentially", "likely", "probably", "possibly"):
+        assert word in SYSTEM_PROMPT
+
+
+def test_system_prompt_evidence_constraint():
+    assert "evidence" in SYSTEM_PROMPT
+    assert "verbatim" in SYSTEM_PROMPT
+    assert "paraphrase" in SYSTEM_PROMPT
