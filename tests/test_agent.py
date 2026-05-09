@@ -1,7 +1,7 @@
 import pytest
 from pydantic_ai.models.test import TestModel
 
-from pr_reviewer.agent import build_agent, run_review
+from pr_reviewer.agent import ModelResolutionError, build_agent, resolve_model, run_review
 from pr_reviewer.schema import Finding, Report, RunMetadata
 
 
@@ -33,3 +33,28 @@ async def test_run_review_returns_report_with_test_model():
     report, usage = await run_review(agent, user_prompt="diff goes here")
     assert isinstance(report, Report)
     assert report.findings == []
+
+
+class TestResolveModel:
+    def test_passthrough_for_native_provider_string(self):
+        assert resolve_model("anthropic:claude-sonnet-4-6") == "anthropic:claude-sonnet-4-6"
+
+    def test_passthrough_for_model_instance(self):
+        m = TestModel()
+        assert resolve_model(m) is m
+
+    def test_openrouter_without_api_key_raises(self, monkeypatch):
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        with pytest.raises(ModelResolutionError, match="OPENROUTER_API_KEY"):
+            resolve_model("openrouter:anthropic/claude-sonnet-4")
+
+    def test_openrouter_with_empty_model_raises(self, monkeypatch):
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
+        with pytest.raises(ModelResolutionError, match="requires a model name"):
+            resolve_model("openrouter:")
+
+    def test_openrouter_with_api_key_returns_openai_chat_model(self, monkeypatch):
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
+        from pydantic_ai.models.openai import OpenAIChatModel
+        result = resolve_model("openrouter:anthropic/claude-sonnet-4")
+        assert isinstance(result, OpenAIChatModel)

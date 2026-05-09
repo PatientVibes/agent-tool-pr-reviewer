@@ -67,7 +67,7 @@ Reviews HEAD against the resolved base ref.
 | `--budget <tokens>` | `80000` | Refuses with exit 2 if the assembled prompt exceeds this. Heuristic: ~4 chars/token. |
 | `--rules-dir <path>` | walk up from cwd | First `.ai-review/` directory found before hitting `.git/` or filesystem root |
 | `--out <path>` | `<repo>/.ai-review/runs/<ts>/` | When set, suppresses `latest.txt` write |
-| `--model <pydantic-ai-model-string>` | `anthropic:claude-sonnet-4-6` | Any Pydantic AI model string, e.g. `openai:gpt-4o`, `ollama:llama3.1` |
+| `--model <model-string>` | `anthropic:claude-sonnet-4-6` | Any Pydantic AI model string (`openai:gpt-4o`, `ollama:llama3.1`, etc.) OR `openrouter:<model>` to route through OpenRouter (see Configuration) |
 
 ### `rules list`
 
@@ -118,9 +118,22 @@ The frontmatter `description:` field is **required** — the CLI exits 2 with a 
 |---|---|---|
 | `ANTHROPIC_API_KEY` | when using the default model | Pydantic AI's default for the `anthropic:` provider |
 | `OPENAI_API_KEY` | when using `--model openai:...` | |
+| `OPENROUTER_API_KEY` | when using `--model openrouter:...` | OpenRouter routes to many providers (Anthropic, OpenAI, Google, etc.) under one key |
 | (other provider keys) | as needed | See [Pydantic AI provider docs](https://ai.pydantic.dev/models/) |
 
 No config file in v1. Everything is via flags + env.
+
+### Using OpenRouter
+
+`--model openrouter:<model-name>` wraps an `OpenAIChatModel` with Pydantic AI's `OpenRouterProvider`. Model names follow OpenRouter's slash convention:
+
+```bash
+agent-tool-pr-reviewer review --model openrouter:anthropic/claude-sonnet-4
+agent-tool-pr-reviewer review --model openrouter:openai/gpt-4o
+agent-tool-pr-reviewer review --model openrouter:google/gemini-2.5-pro
+```
+
+A single `OPENROUTER_API_KEY` covers all of them. The model name shows up in `findings.json`'s `metadata.model` exactly as you typed it (e.g., `openrouter:anthropic/claude-sonnet-4`), so runs across providers stay distinguishable.
 
 ## Troubleshooting
 
