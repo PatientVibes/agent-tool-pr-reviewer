@@ -13,10 +13,10 @@ uv tool install --editable D:/agent-tool-pr-reviewer
 Verify:
 
 ```bash
-agent-tool-pr-reviewer --version    # 0.2.1
+agent-tool-pr-reviewer --version    # 0.2.2
 ```
 
-The default model is `anthropic:claude-sonnet-4-6`, which expects `ANTHROPIC_API_KEY` in the environment.
+The default model is `openrouter:google/gemini-2.5-pro`, which expects `OPENROUTER_API_KEY` in the environment. See "Recommended models" below for the rationale and alternatives.
 
 ## Quick start
 
@@ -67,7 +67,7 @@ Reviews HEAD against the resolved base ref.
 | `--budget <tokens>` | `80000` | Refuses with exit 2 if the assembled prompt exceeds this. Heuristic: ~4 chars/token. |
 | `--rules-dir <path>` | walk up from cwd | First `.ai-review/` directory found before hitting `.git/` or filesystem root |
 | `--out <path>` | `<repo>/.ai-review/runs/<ts>/` | When set, suppresses `latest.txt` write |
-| `--model <model-string>` | `anthropic:claude-sonnet-4-6` | Any Pydantic AI model string (`openai:gpt-4o`, `ollama:llama3.1`, etc.) OR `openrouter:<model>` to route through OpenRouter (see Configuration) |
+| `--model <model-string>` | `openrouter:google/gemini-2.5-pro` | Any Pydantic AI model string (`anthropic:claude-sonnet-4-6`, `openai:gpt-4o`, `ollama:llama3.1`, etc.) OR `openrouter:<model>` to route through OpenRouter (see Configuration). See "Recommended models" below. |
 
 ### `rules list`
 
@@ -116,9 +116,9 @@ The frontmatter `description:` field is **required** — the CLI exits 2 with a 
 
 | Env var | Required | Notes |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | when using the default model | Pydantic AI's default for the `anthropic:` provider |
+| `OPENROUTER_API_KEY` | when using the default model or any `--model openrouter:...` | OpenRouter routes to many providers (Anthropic, OpenAI, Google, etc.) under one key |
+| `ANTHROPIC_API_KEY` | when using `--model anthropic:...` directly | Pydantic AI's default for the `anthropic:` provider |
 | `OPENAI_API_KEY` | when using `--model openai:...` | |
-| `OPENROUTER_API_KEY` | when using `--model openrouter:...` | OpenRouter routes to many providers (Anthropic, OpenAI, Google, etc.) under one key |
 | (other provider keys) | as needed | See [Pydantic AI provider docs](https://ai.pydantic.dev/models/) |
 
 No config file in v1. Everything is via flags + env.
@@ -134,6 +134,16 @@ agent-tool-pr-reviewer review --model openrouter:google/gemini-2.5-pro
 ```
 
 A single `OPENROUTER_API_KEY` covers all of them. The model name shows up in `findings.json`'s `metadata.model` exactly as you typed it (e.g., `openrouter:anthropic/claude-sonnet-4`), so runs across providers stay distinguishable.
+
+## Recommended models
+
+Two trials (16 distinct models, 39 successful runs across 4 chorus-sqlserver PRs) produced this preference order — both for single-model use and for the eventual Tier 2 consensus mode:
+
+1. **`openrouter:google/gemini-2.5-pro`** — *default*. Caught both real bugs across the trials (`:r` regex in trial 1, error-message wording in trial 1) at ~$0.06/run. Has one known FP class (scope-misalignment on generated fixtures) that the deferred Tier 2 scope filter will eliminate.
+2. **`openrouter:moonshotai/kimi-k2.6`** — precision pick. 1 TP, 0 FPs across 4 PRs at ~$0.06/run. Slow on large diffs (up to ~22 min on a 50K-token diff), so a poor fit for interactive use but well-suited to CI and consensus mode.
+3. **`openrouter:deepseek/deepseek-chat-v3.1`** — quietness sentinel. 0 TPs, 0 FPs at ~$0.006/run. Useless as a primary reviewer, valuable in a basket: when DeepSeek does emit a finding, it's worth a closer look because it almost never speaks.
+
+The retrospective with full data is in [`D:/ai-agents/CONTRIBUTING.md`](https://github.com/PatientVibes/ai-agents/blob/master/CONTRIBUTING.md) under the agent-tool-pr-reviewer section. **Models that did NOT make the cut** despite costing more or being marketed for code: Claude Sonnet 4.6, Claude Opus 4.7, GPT-5, GPT-5-mini, Codestral 2508, Qwen3 Coder 480B, GLM 4.6, Grok Code Fast 1, MiniMax M2.7, Llama 4 Maverick (architecturally unusable), DeepSeek R1 Distill (architecturally unusable).
 
 ## Troubleshooting
 

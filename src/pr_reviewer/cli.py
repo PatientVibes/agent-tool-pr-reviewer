@@ -31,7 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
     review.add_argument("--budget", type=int, default=80000)
     review.add_argument("--rules-dir", type=Path, default=None)
     review.add_argument("--out", type=Path, default=None)
-    review.add_argument("--model", default="anthropic:claude-sonnet-4-6")
+    review.add_argument("--model", default="openrouter:google/gemini-2.5-pro")
 
     rules = sub.add_parser("rules", help="Rules subcommands")
     rules_sub = rules.add_subparsers(dest="rules_command", required=True)

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.2 — 2026-05-09
+
+### Changed
+
+- **Default `--model` is now `openrouter:google/gemini-2.5-pro`** (was `anthropic:claude-sonnet-4-6`). Earned by two trials totalling 16 distinct models across 39 successful runs on chorus-sqlserver PRs: Gemini 2.5 Pro caught both real bugs at ~$0.06/run while Sonnet 4.6 missed the `:r` bug. README's new "Recommended models" section captures the full preference order (Gemini > Kimi K2.6 > DeepSeek V3.1) and the rationale.
+- The default now requires `OPENROUTER_API_KEY` instead of `ANTHROPIC_API_KEY`. Environment-variable docs reordered accordingly.
+
+### Note
+
+This is **user-visible behavior change** — fresh installs that don't pass `--model` will fail with a missing-`OPENROUTER_API_KEY` error instead of contacting Anthropic by default. Existing users with `ANTHROPIC_API_KEY` set can preserve old behavior by passing `--model anthropic:claude-sonnet-4-6` explicitly.
+
 ## 0.2.1 — 2026-05-09
 
 ### Fixed
