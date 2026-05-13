@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.3.0 — 2026-05-13
+
+### Added
+
+- **Scope filter for generated/vendored files.** Two-layer deterministic filter that drops excluded files from the diff before the LLM sees them, plus post-hoc finding-drop as defense in depth. Addresses Tier 2 issue #1 — the highest-recurring FP class across both v0.1.0 and v0.2.0 model trials (every model in trial 1 + 5 of 8 new models in trial 2 hit scope-misalignment).
+  - **`.pr-review-ignore`** file at repo root, gitignore-style syntax (via `pathspec` library). Recognized when present; absent files leave behavior unchanged.
+  - **`--exclude <glob>`** CLI flag on the `review` subcommand, repeatable, additive to `.pr-review-ignore` patterns.
+  - Stderr logs `Filtered N file(s) from diff: ...` summary when filtering is active and `Dropped finding for excluded path: <path>` per Layer-2 drop.
+- New dependency: `pathspec>=0.12,<1`.
+
+### Compatibility
+
+- No behavior change when no `.pr-review-ignore` is present AND no `--exclude` flag is passed. `findings.json` schema unchanged. The agent prompt and orchestration are untouched.
+
+### Spec / plan
+
+- Spec: `docs/superpowers/specs/2026-05-13-pr-reviewer-v0.3.0-scope-filter-design.md` in the `ai-agents` catalog.
+- GitHub issue: [#1 — Tier 2 #1 Scope filter](https://github.com/PatientVibes/agent-tool-pr-reviewer/issues/1).
+
 ## 0.2.2 — 2026-05-09
 
 ### Changed
