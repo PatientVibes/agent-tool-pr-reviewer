@@ -25,6 +25,9 @@ from pr_reviewer.prompt import SYSTEM_PROMPT, build_user_prompt
 from pr_reviewer.render import render_markdown
 from pr_reviewer.rules import find_rules_dir, load_rules
 from pr_reviewer.schema import Report, RunMetadata
+from pr_reviewer.verifier import (
+    VerifierDecision, VerifierUsage, resolve_verifier_arg, run_verifier_pass, serialize_decisions,
+)
 
 
 PER_MODEL_TIMEOUT_SECONDS = 1800  # 30 minutes — Kimi observed 22 min worst case in trials
@@ -81,6 +84,20 @@ def build_parser() -> argparse.ArgumentParser:
             "alongside findings.json. Default off (precision play)."
         ),
     )
+    review.add_argument(
+        "--verifier",
+        default=None,
+        metavar="MODEL",
+        help=(
+            "Run a verifier LLM pass on findings after the main review. "
+            "Drops findings whose evidence is not verbatim in the diff, "
+            "whose file is not in the changed-files set, or which the "
+            "verifier model judges self-contradicting or speculative "
+            "(at high/blocker severity). The literal 'default' expands "
+            "to openrouter:anthropic/claude-sonnet-4-6 (cross-family "
+            "bias resistance). Off by default."
+        ),
+    )
 
     rules = sub.add_parser("rules", help="Rules subcommands")
     rules_sub = rules.add_subparsers(dest="rules_command", required=True)
@@ -107,11 +124,57 @@ def _load_exclude_spec(repo: Path, cli_excludes: list[str]) -> pathspec.PathSpec
     return pathspec.PathSpec.from_lines("gitwildmatch", patterns)
 
 
+# ----- Shared verifier hook (Layer 3, v0.5.0) -----
+
+async def _apply_verifier_pass(
+    *,
+    verifier_model: str | None,
+    diff_text: str,
+    kept_findings: list,
+    budget: int,
+    run_dir,
+) -> tuple[list, list, VerifierUsage | None, str | None]:
+    """Shared verifier hook for single-model + multi-model paths.
+
+    Returns:
+      (post_verifier_kept, dropped, usage_or_none, verifier_model_or_none).
+
+    When `verifier_model is None`, returns (kept_findings, [], None, None) —
+    callers stay linear and no `[verifier] ...` stderr lines emit.
+
+    When the verifier is enabled:
+      - prints `[verifier] starting <model>`
+      - calls `run_verifier_pass` (which prints the deterministic / judge
+        summary lines and handles its own fail-open behavior)
+      - if any drops, writes `<run_dir>/dropped-by-verifier.json`
+      - returns the kept findings, the dropped list, the usage object, and
+        the verifier_model string (callers set this on RunMetadata)
+    """
+    if verifier_model is None:
+        return (kept_findings, [], None, None)
+    from pathlib import Path
+
+    print(f"[verifier] starting {verifier_model}", file=sys.stderr)
+    post_kept, dropped, usage = await run_verifier_pass(
+        verifier_model=verifier_model,
+        diff_text=diff_text,
+        kept_findings=kept_findings,
+        budget=budget,
+    )
+    if dropped:
+        run_dir_path = Path(run_dir)
+        (run_dir_path / "dropped-by-verifier.json").write_text(
+            serialize_decisions(dropped), encoding="utf-8",
+        )
+    return (post_kept, dropped, usage, verifier_model)
+
+
 # ----- Single-model path (unchanged behavior) -----
 
 async def run_review_command(
     *, base: str | None, budget: int, rules_dir: Path | None, out: Path | None,
     model: Any, exclude: list[str] | None = None,
+    verifier_model: str | None = None,
 ) -> int:
     repo = Path.cwd()
     started_at = datetime.now(timezone.utc)
@@ -171,14 +234,35 @@ async def run_review_command(
         else:
             kept_findings.append(finding)
 
+    # Layer-3 verifier (new in v0.5.0) — no-op when verifier_model is None.
+    # Must run before RunMetadata is built so the helper can write the sidecar
+    # to the same run_dir, and so we can set RunMetadata.verifier_model.
+    run_dir = prepare_run_dir(repo_root=repo, started_at=started_at, override=out)
+    kept_findings, _dropped, verifier_usage, used_verifier_model = await _apply_verifier_pass(
+        verifier_model=verifier_model,
+        diff_text=diff,
+        kept_findings=kept_findings,
+        budget=budget,
+        run_dir=run_dir,
+    )
+
     duration = time.perf_counter() - t0
+    base_in = getattr(usage, "input_tokens", 0) or 0
+    base_out = getattr(usage, "output_tokens", 0) or 0
+    if verifier_usage is not None:
+        total_in = base_in + verifier_usage.tokens_input
+        total_out = base_out + verifier_usage.tokens_output
+    else:
+        total_in = base_in
+        total_out = base_out
     metadata = RunMetadata(
         branch=branch, base_ref=base_ref,
         commit_head=head, commit_base=mb,
         started_at=started_at, duration_seconds=duration,
         model=str(model) if not isinstance(model, str) else model,
-        tokens_input=getattr(usage, "input_tokens", 0) or 0,
-        tokens_output=getattr(usage, "output_tokens", 0) or 0,
+        tokens_input=total_in,
+        tokens_output=total_out,
+        verifier_model=used_verifier_model,
     )
     # rules_loaded is determined deterministically from disk, NOT trusted from
     # the LLM. The model may hallucinate rule_ids; the CLI is the source of
@@ -189,7 +273,6 @@ async def run_review_command(
         findings=kept_findings,
     )
 
-    run_dir = prepare_run_dir(repo_root=repo, started_at=started_at, override=out)
     (run_dir / "findings.json").write_text(
         sealed_report.model_dump_json(indent=2), encoding="utf-8",
     )
@@ -246,6 +329,7 @@ async def run_multi_model_review_command(
     *, base: str | None, budget: int, rules_dir: Path | None, out: Path | None,
     models: list[str], consensus_threshold: int, include_uncorroborated: bool,
     exclude: list[str] | None = None,
+    verifier_model: str | None = None,
 ) -> int:
     repo = Path.cwd()
     started_at = datetime.now(timezone.utc)
@@ -329,13 +413,28 @@ async def run_multi_model_review_command(
         else:
             kept_findings.append(finding)
 
+    # Layer-3 verifier (new in v0.5.0) — no-op when verifier_model is None.
+    run_dir = prepare_run_dir(repo_root=repo, started_at=started_at, override=out)
+    kept_findings, _dropped, verifier_usage, used_verifier_model = await _apply_verifier_pass(
+        verifier_model=verifier_model,
+        diff_text=diff,
+        kept_findings=kept_findings,
+        budget=budget,
+        run_dir=run_dir,
+    )
+
     # Override metadata with run-level values
     duration = time.perf_counter() - t0
-    merged_metadata = merged_report.metadata.model_copy(update={
+    update_dict: dict = {
         "branch": branch, "base_ref": base_ref,
         "commit_head": head, "commit_base": mb,
         "started_at": started_at, "duration_seconds": duration,
-    })
+        "verifier_model": used_verifier_model,
+    }
+    if verifier_usage is not None:
+        update_dict["tokens_input"] = merged_report.metadata.tokens_input + verifier_usage.tokens_input
+        update_dict["tokens_output"] = merged_report.metadata.tokens_output + verifier_usage.tokens_output
+    merged_metadata = merged_report.metadata.model_copy(update=update_dict)
     sealed_report = Report(
         metadata=merged_metadata,
         rules_loaded=[r.rule_id for r in rules],
@@ -370,7 +469,7 @@ async def run_multi_model_review_command(
     )
 
     # Write outputs
-    run_dir = prepare_run_dir(repo_root=repo, started_at=started_at, override=out)
+
     (run_dir / "findings.json").write_text(
         sealed_report.model_dump_json(indent=2), encoding="utf-8",
     )
@@ -410,6 +509,13 @@ def main(argv: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
             return 2
+        # Resolve verifier arg pre-flight; bad value -> exit 2 BEFORE burning
+        # reviewer tokens and failing at the end.
+        try:
+            verifier_model = resolve_verifier_arg(args.verifier)
+        except ValueError as exc:
+            print(f"error: --verifier: {exc}", file=sys.stderr)
+            return 2
         if args.models is not None:
             try:
                 resolved_models = resolve_models_arg(args.models)
@@ -422,12 +528,14 @@ def main(argv: list[str] | None = None) -> int:
                 consensus_threshold=args.consensus,
                 include_uncorroborated=args.include_uncorroborated,
                 exclude=args.exclude,
+                verifier_model=verifier_model,
             ))
         # Single-model path (default if neither flag): use the existing default
         single_model = args.model or "openrouter:google/gemini-2.5-pro"
         return asyncio.run(run_review_command(
             base=args.base, budget=args.budget, rules_dir=args.rules_dir,
             out=args.out, model=single_model, exclude=args.exclude,
+            verifier_model=verifier_model,
         ))
     if args.command == "rules" and args.rules_command == "list":
         return run_rules_list_command()

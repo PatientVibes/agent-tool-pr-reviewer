@@ -1,0 +1,60 @@
+{
+  "diff_text": "diff --git a/src/foo.py b/src/foo.py\n--- a/src/foo.py\n+++ b/src/foo.py\n@@ -1,3 +1,4 @@\n def foo():\n     x = 1\n+    y = None.bad_attr\n     return x\ndiff --git a/src/bar.py b/src/bar.py\n--- a/src/bar.py\n+++ b/src/bar.py\n@@ -1,2 +1,3 @@\n def bar():\n+    return 42\n",
+  "canned_reviewer_findings": [
+    {
+      "category": "bug",
+      "severity": "blocker",
+      "file": "src/foo.py",
+      "line_start": 3,
+      "line_end": 3,
+      "rule_id": null,
+      "title": "AttributeError on None",
+      "description": "Calling .bad_attr on None will raise AttributeError. On reflection this is fine, the code path is unreachable.",
+      "evidence": "+    y = None.bad_attr",
+      "suggested_fix": null
+    },
+    {
+      "category": "bug",
+      "severity": "high",
+      "file": "src/foo.py",
+      "line_start": 3,
+      "line_end": 3,
+      "rule_id": null,
+      "title": "Paraphrased evidence",
+      "description": "The y assignment references a None object attribute access.",
+      "evidence": "y is set to None dot bad attribute",
+      "suggested_fix": null
+    },
+    {
+      "category": "bug",
+      "severity": "medium",
+      "file": "src/baz.py",
+      "line_start": 1,
+      "line_end": 1,
+      "rule_id": null,
+      "title": "File not in diff",
+      "description": "Some issue in a file the diff did not change.",
+      "evidence": "+    return 42",
+      "suggested_fix": null
+    },
+    {
+      "category": "bug",
+      "severity": "high",
+      "file": "src/bar.py",
+      "line_start": 2,
+      "line_end": 2,
+      "rule_id": null,
+      "title": "Clean finding",
+      "description": "Magic number 42 used without explanation; refactor to a named constant.",
+      "evidence": "+    return 42",
+      "suggested_fix": null
+    }
+  ],
+  "expected_kept_files": ["src/bar.py"],
+  "expected_dropped_count": 3,
+  "expected_drop_stages": {
+    "Paraphrased evidence": "deterministic",
+    "File not in diff": "deterministic",
+    "AttributeError on None": "judge"
+  }
+}
