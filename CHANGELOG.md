@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1 — 2026-05-13
+
+### Changed
+
+- **Widened hedging-word guard** (Tier 2 #4). The system prompt's hedging-word check now (a) applies at `high` severity in addition to `blocker`, and (b) adds `can` and `would` to the guarded-words list. Catches the "X can crash if Y is Z" speculative-consequence pattern observed in trial 1 gpt-5 phase-3 that slipped past the blocker-only / 7-word guard at medium severity. Pure precision improvement, no API or schema change.
+
 ## 0.4.0 — 2026-05-13
 
 ### Added

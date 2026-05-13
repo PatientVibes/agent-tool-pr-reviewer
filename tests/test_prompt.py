@@ -73,9 +73,22 @@ def test_system_prompt_excludes_speculative_consequences():
     assert "extrapolation" in SYSTEM_PROMPT.lower()
 
 
-def test_system_prompt_blocker_hedging_guard():
-    for word in ("might", "may", "could", "potentially", "likely", "probably", "possibly"):
+def test_system_prompt_hedging_guard_words():
+    # v0.4.1 widened: 'can' and 'would' added to the guard list.
+    for word in ("might", "may", "could", "can", "would", "potentially", "likely", "probably", "possibly"):
         assert word in SYSTEM_PROMPT
+
+
+def test_system_prompt_hedging_guard_applies_to_blocker_and_high():
+    # v0.4.1 widened: guard now applies at high severity, not just blocker.
+    # Locate the guard sentence and assert both severities appear in it.
+    lines = SYSTEM_PROMPT.splitlines()
+    guard_line = next(
+        line for line in lines
+        if "hedging words" in line.lower() or "hedging word" in line.lower()
+    )
+    assert "blocker" in guard_line
+    assert "high" in guard_line
 
 
 def test_system_prompt_evidence_constraint():

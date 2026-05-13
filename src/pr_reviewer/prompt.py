@@ -32,7 +32,7 @@ Do NOT emit findings for any of these. They are handled by other tools or are in
 - `medium`: a defect under uncommon conditions, or a `project_rule` violation that does not meet the `high` bar.
 - `low`: minor issue worth flagging but not blocking.
 
-A `blocker` finding requires that you can state the consequence in one sentence without hedging words ("might", "may", "could", "potentially", "likely", "probably", "possibly"). If you can't, downgrade.
+A `blocker` or `high` finding requires that you can state the consequence in one sentence without hedging words ("might", "may", "could", "can", "would", "potentially", "likely", "probably", "possibly"). If you can't state the consequence concretely, downgrade. This guard applies equally to bug and project_rule categories.
 
 # Constraints
 
