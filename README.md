@@ -230,6 +230,39 @@ Writes below-threshold findings to `<run-dir>/uncorroborated.json` alongside `fi
 - `--model` and `--models` are mutually exclusive. The single-model `--model` path is unchanged.
 - `.pr-review-ignore` and `--exclude` apply ONCE before dispatch — all N models see the same filtered diff.
 
+## Verifier pass (v0.5.0)
+
+`--verifier MODEL` enables a Layer-3 precision filter that runs after consensus + scope filter. It catches false-positive classes that prompt-side guards and convergence don't fully address:
+
+| Check | Stage | What it catches |
+|---|---|---|
+| Evidence verbatim in diff | Deterministic (zero-token) | Paraphrased / hallucinated evidence quotes |
+| File in changed-files set | Deterministic (zero-token) | Findings referencing files outside the diff |
+| Self-withdrawal | LLM judge | "this annotation is withdrawn", "on reflection this is fine" |
+| Speculation at high/blocker | LLM judge | Hedged consequences ("might cause Y") at non-mediums |
+| Scope drift | LLM judge | Findings whose `description` references blocks not in the diff |
+
+Default verifier model is `openrouter:anthropic/claude-sonnet-4-6` — cross-family from the Gemini-led consensus basket for bias resistance. Same `OPENROUTER_API_KEY` as the reviewer; no extra credential.
+
+```bash
+# Single-model + verifier
+agent-tool-pr-reviewer review --model openrouter:google/gemini-2.5-pro --verifier default
+
+# Multi-model consensus + verifier (stacked precision)
+agent-tool-pr-reviewer review --models default --verifier default
+
+# Custom verifier model
+agent-tool-pr-reviewer review --models default --verifier openrouter:google/gemini-2.5-flash
+```
+
+When the verifier drops findings, they are written to `<run-dir>/dropped-by-verifier.json` with per-finding `drop_stage` (`"deterministic"` or `"judge"`) and `drop_reason`. The kept findings go to `findings.json` as usual.
+
+`project_rule` category findings skip the LLM judge stage (deterministic gate still applies). The verifier's system prompt does not include rule bodies; judging rule violations as "scope drift" without the rule context would be unsound.
+
+Cost: one Sonnet 4.6 call per run on the surviving bug-category findings. Typical 5–15 finding survivor count: ~1–2k input tokens + ~500 output tokens ≈ $0.02. Add this to your per-run reviewer cost when running with `--verifier default`.
+
+`--verifier` is off by default. Drop-only verdicts in v0.5.0 (downgrade and description-rewrite verdicts deferred to v0.5.x).
+
 ## Recommended models
 
 Two trials (16 distinct models, 39 successful runs across 4 chorus-sqlserver PRs) produced this preference order — both for single-model use and for the eventual Tier 2 consensus mode:

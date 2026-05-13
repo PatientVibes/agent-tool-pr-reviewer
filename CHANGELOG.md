@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0 — 2026-05-14
+
+- **NEW**: `--verifier MODEL` flag — Layer-3 precision filter (deterministic gate + LLM judge) runs after consensus + scope filter. Drops findings on evidence-not-verbatim, file-not-in-diff, self-withdrawal, speculation-at-high+blocker, or scope-drift. Off by default. Sugar `--verifier default` expands to `openrouter:anthropic/claude-sonnet-4-6` (cross-family bias resistance; same OpenRouter API key).
+- **NEW**: `dropped-by-verifier.json` sidecar written when verifier drops findings; entries include `drop_stage` (`deterministic` or `judge`) and `drop_reason`.
+- **Schema**: `RunMetadata.verifier_model: str | None = None` added (optional). `schema_version` stays `"3"` — additive optional fields don't bump.
+- **Refactor**: `build_agent(model, output_type, system_prompt)` — both `output_type` and `system_prompt` now required keyword arguments. Existing callers in `cli.py` and `test_agent.py` pass them explicitly. The two must vary together (a `Report` output type pairs with the reviewer's prompt; a `VerdictBatch` pairs with the verifier's).
+- **Behavior**: `project_rule` findings skip the LLM judge stage (deterministic gate still applies). Drop-only verdicts; no downgrade or rewrite in v0.5.0. Fail-open on any judge-stage exception: keep all stage-3a survivors, log `[verifier] errored: ...`, set `RunMetadata.verifier_model` to record the attempt.
+- **Tests**: 27 new tests (15 unit + 5 single-model smoke + 2 multi-model smoke + 1 schema roundtrip + 4 extract_changed_files); 163 total.
+
 ## 0.4.1 — 2026-05-13
 
 ### Changed
