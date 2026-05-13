@@ -1,0 +1,2 @@
+# Used by test_cli_multi_model_smoke.py to verify scope-filter interaction
+generated/**
