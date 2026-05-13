@@ -21,7 +21,7 @@ from pr_reviewer.diff import (
     resolve_base_ref,
 )
 from pr_reviewer.paths import prepare_run_dir, write_latest_pointer
-from pr_reviewer.prompt import build_user_prompt
+from pr_reviewer.prompt import SYSTEM_PROMPT, build_user_prompt
 from pr_reviewer.render import render_markdown
 from pr_reviewer.rules import find_rules_dir, load_rules
 from pr_reviewer.schema import Report, RunMetadata
@@ -155,7 +155,7 @@ async def run_review_command(
         )
         return 2
 
-    agent = build_agent(model)
+    agent = build_agent(model, output_type=Report, system_prompt=SYSTEM_PROMPT)
     report, usage = await run_review(agent, user_prompt)
 
     # Layer-2 finding filter: defense-in-depth against a model that returns
@@ -216,7 +216,7 @@ async def _dispatch_one_model(
     consensus but the run continues.
     """
     try:
-        agent = build_agent(model_spec)
+        agent = build_agent(model_spec, output_type=Report, system_prompt=SYSTEM_PROMPT)
         report, usage = await asyncio.wait_for(
             run_review(agent, user_prompt),
             timeout=PER_MODEL_TIMEOUT_SECONDS,

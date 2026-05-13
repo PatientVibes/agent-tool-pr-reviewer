@@ -29,7 +29,8 @@ async def test_run_review_returns_report_with_test_model():
         "rules_loaded": [],
         "findings": [],
     })
-    agent = build_agent(model=test_model)
+    from pr_reviewer.prompt import SYSTEM_PROMPT
+    agent = build_agent(model=test_model, output_type=Report, system_prompt=SYSTEM_PROMPT)
     report, usage = await run_review(agent, user_prompt="diff goes here")
     assert isinstance(report, Report)
     assert report.findings == []

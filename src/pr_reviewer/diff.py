@@ -122,6 +122,32 @@ def parse_chunks(diff: str) -> list[tuple[str, str]]:
     return chunks
 
 
+def extract_changed_files(diff_text: str) -> set[str]:
+    """Return the set of post-change file paths from a unified diff.
+
+    Parses `+++ b/<path>` lines and ignores `+++ /dev/null` entries (deleted
+    files). Paths are returned repo-relative with forward slashes — that's
+    what `git diff` emits regardless of OS.
+
+    Used by the verifier's deterministic gate to confirm a finding's `file`
+    field references one of the files actually changed in the diff. A
+    finding referencing a file not in this set is hallucinated and is
+    dropped before the LLM judge call.
+    """
+    paths: set[str] = set()
+    for line in diff_text.splitlines():
+        if not line.startswith("+++ "):
+            continue
+        target = line[4:]
+        if target == "/dev/null":
+            continue
+        if target.startswith("b/"):
+            paths.add(target[2:])
+            continue
+        paths.add(target)
+    return paths
+
+
 def filter_diff(
     diff: str,
     spec: pathspec.PathSpec,

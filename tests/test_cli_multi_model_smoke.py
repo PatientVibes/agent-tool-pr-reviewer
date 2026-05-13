@@ -68,7 +68,8 @@ def _make_canned_agent(report: Report):
 
 def _build_canned_agents_dispatch(per_model: dict[str, list[Finding]]):
     """Returns a fake build_agent function that yields the right canned report per model string."""
-    def fake_build_agent(model_spec):
+    def fake_build_agent(model_spec, *, output_type=None, system_prompt=None):
+        """Test fake — accepts the new kwargs but ignores them; reviewer-only context."""
         report = _make_report(model_spec, per_model.get(model_spec, []))
         return _make_canned_agent(report)
     return fake_build_agent

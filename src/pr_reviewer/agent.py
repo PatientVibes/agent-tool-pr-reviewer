@@ -1,15 +1,17 @@
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 
+from pydantic import BaseModel
 from pydantic_ai import Agent
 from pydantic_ai.models import KnownModelName, Model
 from pydantic_ai.usage import RunUsage
 
-from pr_reviewer.prompt import SYSTEM_PROMPT
 from pr_reviewer.schema import Report
 
 if TYPE_CHECKING:
     from openai.types.chat import ChatCompletion
+
+_OutputT = TypeVar("_OutputT", bound=BaseModel)
 
 
 # The openai SDK pins service_tier to a Literal that doesn't include all values
@@ -93,11 +95,24 @@ def resolve_model(spec: "str | Model") -> "KnownModelName | Model":
     return spec  # str passthrough; Pydantic AI will parse the provider prefix
 
 
-def build_agent(model: "KnownModelName | Model | str") -> Agent[None, Report]:
+def build_agent(
+    model: "KnownModelName | Model | str",
+    *,
+    output_type: type[_OutputT],
+    system_prompt: str,
+) -> Agent[None, _OutputT]:
+    """Build a pydantic-ai Agent with the given model, output_type, and system_prompt.
+
+    Both `output_type` and `system_prompt` are required (no defaults) because the
+    two vary together: a `Report` output_type pairs with the reviewer's
+    `prompt.SYSTEM_PROMPT`; a `VerdictBatch` output_type pairs with the verifier's
+    `verifier.SYSTEM_PROMPT`. Having defaults would silently bind the wrong prompt
+    to the wrong output type.
+    """
     return Agent(
         model=resolve_model(model),
-        output_type=Report,
-        system_prompt=SYSTEM_PROMPT,
+        output_type=output_type,
+        system_prompt=system_prompt,
     )
 
 
