@@ -1,6 +1,6 @@
 [project]
 name = "agent-tool-pr-reviewer"
-version = "0.2.2"
+version = "0.3.0"
 description = "AI-driven pull request reviewer producing typed findings.json + review-output.md"
 authors = [{ name = "Chris Moore", email = "chris.paul.moore@gmail.com" }]
 requires-python = ">=3.11"
@@ -12,6 +12,7 @@ dependencies = [
     # Pin below 0.70 until pydantic-ai catches up.
     "anthropic>=0.61,<0.70",
     "pyyaml>=6.0,<7",
+    "pathspec>=0.12,<1",
 ]
 
 [project.scripts]
