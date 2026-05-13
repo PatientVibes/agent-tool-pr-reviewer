@@ -127,6 +127,7 @@ def test_single_model_verifier_drops_self_withdrawal_and_deterministic_fails(
     out_dir = tmp_path / "out"
     exit_code = cli.main([
         "review",
+        "--skip-precheck",
         "--model", "fake-reviewer",
         "--verifier", "fake-verifier",
         "--out", str(out_dir),
@@ -164,6 +165,7 @@ def test_single_model_no_verifier_unchanged_output(monkeypatch, tmp_path, canned
     out_dir = tmp_path / "out"
     exit_code = cli.main([
         "review",
+        "--skip-precheck",
         "--model", "fake-reviewer",
         "--out", str(out_dir),
         "--budget", "100000",
@@ -187,6 +189,7 @@ def test_verifier_fails_open_on_exception(monkeypatch, tmp_path, canned, capsys)
     out_dir = tmp_path / "out"
     exit_code = cli.main([
         "review",
+        "--skip-precheck",
         "--model", "fake-reviewer",
         "--verifier", "fake-verifier",
         "--out", str(out_dir),
@@ -213,6 +216,7 @@ def test_verifier_fails_open_on_malformed_batch(monkeypatch, tmp_path, canned, c
     out_dir = tmp_path / "out"
     exit_code = cli.main([
         "review",
+        "--skip-precheck",
         "--model", "fake-reviewer",
         "--verifier", "fake-verifier",
         "--out", str(out_dir),
@@ -235,6 +239,7 @@ def test_verifier_arg_resolution_failure_exit_2_before_review(monkeypatch, tmp_p
 
     exit_code = cli.main([
         "review",
+        "--skip-precheck",
         "--model", "fake-reviewer",
         "--verifier", "   ",
         "--out", str(tmp_path / "out"),

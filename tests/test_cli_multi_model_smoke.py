@@ -121,6 +121,7 @@ def test_multi_model_smoke_consensus_2of3(fixture_repo, monkeypatch, capsys):
     out_dir = fixture_repo / "out"
     exit_code = cli.main([
         "review",
+        "--skip-precheck",
         "--models", "fake-a,fake-b,fake-c",
         "--out", str(out_dir),
     ])
@@ -154,6 +155,7 @@ def test_multi_model_smoke_include_uncorroborated_writes_file(fixture_repo, monk
     out_dir = fixture_repo / "out2"
     exit_code = cli.main([
         "review",
+        "--skip-precheck",
         "--models", "fake-a,fake-b,fake-c",
         "--include-uncorroborated",
         "--out", str(out_dir),
@@ -197,6 +199,7 @@ def test_multi_model_smoke_scope_filter_runs_once(fixture_repo, monkeypatch, cap
     out_dir = fixture_repo / "out3"
     exit_code = cli.main([
         "review",
+        "--skip-precheck",
         "--models", "fake-a,fake-b,fake-c",
         "--exclude", "generated/**",
         "--out", str(out_dir),
@@ -213,6 +216,7 @@ def test_multi_model_smoke_scope_filter_runs_once(fixture_repo, monkeypatch, cap
 def test_model_and_models_flags_mutually_exclusive(fixture_repo, capsys):
     exit_code = cli.main([
         "review",
+        "--skip-precheck",
         "--model", "openrouter:foo/bar",
         "--models", "fake-a,fake-b",
     ])

@@ -13,6 +13,7 @@ import pathspec
 
 from pr_reviewer import __version__
 from pr_reviewer.agent import build_agent, run_review
+from pr_reviewer.compat import precheck_and_exit_if_bad
 from pr_reviewer.consensus import (
     DEFAULT_BASKET, PerModelResult, merge_reports, resolve_models_arg,
 )
@@ -96,6 +97,19 @@ def build_parser() -> argparse.ArgumentParser:
             "(at high/blocker severity). The literal 'default' expands "
             "to openrouter:anthropic/claude-sonnet-4-6 (cross-family "
             "bias resistance). Off by default."
+        ),
+    )
+    review.add_argument(
+        "--skip-precheck",
+        action="store_true",
+        default=False,
+        help=(
+            "Skip the tool-use compatibility precheck. By default, every "
+            "review invocation probes each resolved model (reviewer + "
+            "consensus basket + verifier) to confirm it supports "
+            "structured tool-call output before dispatching the real review. "
+            "Pass this flag if the probe itself is flaky or you want to "
+            "deliberately attempt a known-borderline model."
         ),
     )
 
@@ -516,25 +530,40 @@ def main(argv: list[str] | None = None) -> int:
         except ValueError as exc:
             print(f"error: --verifier: {exc}", file=sys.stderr)
             return 2
+        # Resolve reviewer models BEFORE the precheck so it has access to the
+        # full list. The v0.5.0 shape resolved these inside the dispatch
+        # if/else branches; hoisting them up is the v0.5.1 refactor.
         if args.models is not None:
             try:
-                resolved_models = resolve_models_arg(args.models)
+                resolved_review_models = resolve_models_arg(args.models)
             except ValueError as exc:
                 print(f"error: --models: {exc}", file=sys.stderr)
                 return 2
+            use_multi_model = True
+        else:
+            resolved_review_models = [args.model or "openrouter:google/gemini-2.5-pro"]
+            use_multi_model = False
+        # v0.5.1: precheck (Layer 0) — runs unless --skip-precheck
+        if not args.skip_precheck:
+            models_to_check = list(resolved_review_models)
+            if verifier_model is not None:
+                models_to_check.append(verifier_model)
+            precheck_exit = asyncio.run(precheck_and_exit_if_bad(models_to_check))
+            if precheck_exit is not None:
+                return precheck_exit
+        # Dispatch
+        if use_multi_model:
             return asyncio.run(run_multi_model_review_command(
                 base=args.base, budget=args.budget, rules_dir=args.rules_dir,
-                out=args.out, models=resolved_models,
+                out=args.out, models=resolved_review_models,
                 consensus_threshold=args.consensus,
                 include_uncorroborated=args.include_uncorroborated,
                 exclude=args.exclude,
                 verifier_model=verifier_model,
             ))
-        # Single-model path (default if neither flag): use the existing default
-        single_model = args.model or "openrouter:google/gemini-2.5-pro"
         return asyncio.run(run_review_command(
             base=args.base, budget=args.budget, rules_dir=args.rules_dir,
-            out=args.out, model=single_model, exclude=args.exclude,
+            out=args.out, model=resolved_review_models[0], exclude=args.exclude,
             verifier_model=verifier_model,
         ))
     if args.command == "rules" and args.rules_command == "list":

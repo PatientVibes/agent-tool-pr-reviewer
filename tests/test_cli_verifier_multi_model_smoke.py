@@ -106,6 +106,7 @@ def test_multi_model_with_verifier_drops_and_sidecar(monkeypatch, tmp_path, cann
     out_dir = tmp_path / "out"
     exit_code = cli.main([
         "review",
+        "--skip-precheck",
         "--models", "fake-a,fake-b,fake-c",
         "--consensus", "2",
         "--verifier", "fake-verifier",
@@ -135,6 +136,7 @@ def test_multi_model_without_verifier_unchanged(monkeypatch, tmp_path, canned, c
     out_dir = tmp_path / "out"
     exit_code = cli.main([
         "review",
+        "--skip-precheck",
         "--models", "fake-a,fake-b,fake-c",
         "--consensus", "2",
         "--out", str(out_dir),
