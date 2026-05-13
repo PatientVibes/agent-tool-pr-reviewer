@@ -1,0 +1,13 @@
+# Fixture exclusion patterns for tests/test_filter.py
+
+# Exclude all generated SQL fixtures
+tests/fixtures/*.sql
+
+# Exclude binary data files
+*.dat
+
+# Anchored exclude — only at repo root
+/build/**
+
+# Re-include exception (test that ! works)
+!tests/fixtures/important.sql

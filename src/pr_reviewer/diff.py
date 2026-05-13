@@ -1,6 +1,8 @@
 import subprocess
 from pathlib import Path
 
+import pathspec
+
 
 class GitError(RuntimeError):
     """A git subprocess command failed."""
@@ -67,3 +69,80 @@ def merge_base(repo: Path, base: str) -> str:
 
 def current_branch(repo: Path) -> str:
     return _git(repo, "rev-parse", "--abbrev-ref", "HEAD").strip()
+
+
+def _extract_dest_path(header_line: str) -> str | None:
+    """Extract the b-side path from a 'diff --git a/<a> b/<b>' header.
+
+    Uses rpartition on ' b/' so the LAST occurrence wins — handles the edge
+    case where a-path or b-path might contain ' b/' substrings (rare).
+    Returns None if the line doesn't match the expected shape.
+    """
+    body = header_line.removeprefix("diff --git ").rstrip()
+    if " b/" not in body:
+        return None
+    a_part, _, b_part = body.rpartition(" b/")
+    if not a_part.startswith("a/"):
+        return None
+    return b_part
+
+
+def parse_chunks(diff: str) -> list[tuple[str, str]]:
+    """Split a git diff into (dest_path, chunk_text) tuples.
+
+    Extracts dest_path from the 'diff --git a/<a> b/<b>' header line, which is
+    ALWAYS present exactly once per chunk regardless of chunk type (modification,
+    addition, deletion, rename, binary, or mode-only). For rename chunks, the
+    'rename to <Y>' line overrides with the destination — this handles the case
+    where 'rename to <Y>' explicitly names the post-rename path.
+
+    chunk_text preserves the full original bytes including the trailing newline
+    so concatenating all chunks reconstructs the input diff exactly.
+    """
+    chunks: list[tuple[str, str]] = []
+    current_lines: list[str] = []
+    current_dest: str | None = None
+
+    def flush() -> None:
+        if current_dest is not None:
+            chunks.append((current_dest, "".join(current_lines)))
+
+    for line in diff.splitlines(keepends=True):
+        if line.startswith("diff --git "):
+            flush()
+            current_lines = [line]
+            current_dest = _extract_dest_path(line)
+        elif line.startswith("rename to "):
+            current_lines.append(line)
+            current_dest = line.removeprefix("rename to ").rstrip()
+        else:
+            current_lines.append(line)
+
+    flush()
+    return chunks
+
+
+def filter_diff(
+    diff: str,
+    spec: pathspec.PathSpec,
+) -> tuple[str, list[str]]:
+    """Filter a git diff by dropping chunks whose dest path matches `spec`.
+
+    Returns (filtered_diff, excluded_paths). When `spec` matches no patterns
+    (empty), the input diff is returned unchanged and excluded_paths is [].
+
+    Path-matching uses pathspec's gitwildmatch (gitignore-style) semantics:
+    - `*` matches within a single path segment
+    - `**` matches any number of segments
+    - Leading `/` anchors to repo root
+    - Leading `!` re-includes a file matched by a prior pattern
+    """
+    chunks = parse_chunks(diff)
+    kept: list[str] = []
+    excluded: list[str] = []
+    for path, body in chunks:
+        if spec.match_file(path):
+            excluded.append(path)
+        else:
+            kept.append(body)
+    return "".join(kept), excluded

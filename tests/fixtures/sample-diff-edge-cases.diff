@@ -1,0 +1,25 @@
+diff --git a/old_name.py b/new_name.py
+similarity index 100%
+rename from old_name.py
+rename to new_name.py
+diff --git a/added.txt b/added.txt
+new file mode 100644
+index 0000000..abc1234
+--- /dev/null
++++ b/added.txt
+@@ -0,0 +1 @@
++new file content
+diff --git a/deleted.txt b/deleted.txt
+deleted file mode 100644
+index abc1234..0000000
+--- a/deleted.txt
++++ /dev/null
+@@ -1 +0,0 @@
+-removed line
+diff --git a/bin.dat b/bin.dat
+new file mode 100644
+index 0000000..eaf36c1
+Binary files /dev/null and b/bin.dat differ
+diff --git a/exec_me.sh b/exec_me.sh
+old mode 100644
+new mode 100755
