@@ -186,6 +186,50 @@ agent-tool-pr-reviewer review --model openrouter:google/gemini-2.5-pro
 
 A single `OPENROUTER_API_KEY` covers all of them. The model name shows up in `findings.json`'s `metadata.model` exactly as you typed it (e.g., `openrouter:anthropic/claude-sonnet-4`), so runs across providers stay distinguishable.
 
+## Multi-model consensus mode
+
+For higher-precision reviews, run N models in parallel and keep only findings that two or more models flag independently. Convergence is the strongest TP signal we have without a verifier-pass LLM call (see the v0.2.x trial retrospective).
+
+### Default basket
+
+```bash
+agent-tool-pr-reviewer review --models default
+```
+
+`default` expands to the empirically-Pareto-optimal 3-model basket:
+
+1. `openrouter:google/gemini-2.5-pro` — breadth
+2. `openrouter:moonshotai/kimi-k2.6` — precision
+3. `openrouter:deepseek/deepseek-chat-v3.1` — quietness sentinel
+
+Default threshold is `--consensus 2` (a finding must be flagged by ≥2 of the 3 models). Output annotates each surviving finding with `agreement_count` and `agreed_by` in `findings.json` and a `**Agreement:** N/M (flagged by: ...)` line in `review-output.md`.
+
+### Custom basket
+
+```bash
+agent-tool-pr-reviewer review \
+    --models openrouter:google/gemini-2.5-pro,openrouter:anthropic/claude-sonnet-4-6 \
+    --consensus 2
+```
+
+`--consensus 1` keeps every finding (no filtering); `--consensus N` requires unanimous flagging across N models.
+
+### Trial debugging
+
+```bash
+agent-tool-pr-reviewer review --models default --include-uncorroborated
+```
+
+Writes below-threshold findings to `<run-dir>/uncorroborated.json` alongside `findings.json`. Useful for inspecting what each model flagged uniquely.
+
+### Behavior notes
+
+- All N models run in parallel via `asyncio.gather`. Different OpenRouter upstreams = no shared rate limit.
+- If one model fails (timeout, validation, rate limit, network), the run continues with the surviving models; the failure is recorded in `metadata.per_model_usage`. Hard fails only if 0 models succeed.
+- Per-model timeout is 30 minutes (Kimi K2.6 observed at 22 min on 50K-token diffs).
+- `--model` and `--models` are mutually exclusive. The single-model `--model` path is unchanged.
+- `.pr-review-ignore` and `--exclude` apply ONCE before dispatch — all N models see the same filtered diff.
+
 ## Recommended models
 
 Two trials (16 distinct models, 39 successful runs across 4 chorus-sqlserver PRs) produced this preference order — both for single-model use and for the eventual Tier 2 consensus mode:

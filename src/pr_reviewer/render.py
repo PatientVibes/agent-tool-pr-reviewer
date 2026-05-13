@@ -58,6 +58,13 @@ def _render_finding(f: Finding) -> list[str]:
     out: list[str] = []
     out.append(f"### `{f.file}:{f.line_start}-{f.line_end}` — {f.title}")
     out.append("")
+    if f.agreement_count is not None and f.agreed_by is not None:
+        flagged_by = ", ".join(f.agreed_by)
+        out.append(
+            f"**Agreement:** {f.agreement_count}/{len(f.agreed_by)} models "
+            f"(flagged by: {flagged_by})"
+        )
+        out.append("")
     out.append("**Evidence:**")
     out.append("")
     out.append("````diff")

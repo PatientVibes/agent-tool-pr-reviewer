@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.4.0 — 2026-05-13
+
+### Added
+
+- `--models <list>` flag: run N models in parallel and keep only convergent findings (Tier 2 #2). The literal `default` expands to the curated 3-model basket (Gemini 2.5 Pro + Kimi K2.6 + DeepSeek V3.1).
+- `--consensus N` flag: minimum models that must flag a finding to survive. Default `2`.
+- `--include-uncorroborated` flag: writes below-threshold findings to `uncorroborated.json` for trial debugging.
+- New `consensus.py` module with deterministic match-and-merge (file + line-overlap hard key, title 3-gram Jaccard ≥ 0.3 OR evidence containment soft confirm, project-rule cross-line via `(file, rule_id)`).
+- `Finding.agreement_count` + `Finding.agreed_by` optional fields.
+- `RunMetadata.models` + `RunMetadata.per_model_usage` optional fields; new `ModelUsage` submodel.
+- 30-minute per-model timeout (via `asyncio.wait_for`). Partial-failure tolerated: 1 of N failing models doesn't abort the run; 0 of N raises.
+
+### Changed
+
+- Schema version bumped `2` → `3`. Strictly additive — all new fields are optional and default to `None`. v2 consumers (e.g. the `pr-review` skill) continue to work without modification.
+- Single-model output adds the four new optional fields serialized as `null`; consumer-visible behavior unchanged.
+
+### Notes
+
+- `--model` and `--models` are mutually exclusive.
+- All N models run in parallel; one model's failure is tolerated as long as ≥1 succeeds.
+- `.pr-review-ignore` / `--exclude` apply once before dispatch — N models see the same filtered diff.
+
 ## 0.3.0 — 2026-05-13
 
 ### Added
