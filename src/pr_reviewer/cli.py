@@ -9,10 +9,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import pathspec
+
 from pr_reviewer import __version__
 from pr_reviewer.agent import build_agent, run_review
 from pr_reviewer.diff import (
-    BaseRefError, current_branch, extract_diff, head_sha, merge_base, resolve_base_ref,
+    BaseRefError, current_branch, extract_diff, filter_diff, head_sha, merge_base,
+    resolve_base_ref,
 )
 from pr_reviewer.paths import prepare_run_dir, write_latest_pointer
 from pr_reviewer.prompt import build_user_prompt
@@ -29,6 +32,17 @@ def build_parser() -> argparse.ArgumentParser:
     review = sub.add_parser("review", help="Review HEAD vs base ref")
     review.add_argument("--base", default=None)
     review.add_argument("--budget", type=int, default=80000)
+    review.add_argument(
+        "--exclude",
+        action="append",
+        default=[],
+        metavar="GLOB",
+        help=(
+            "Exclude files matching GLOB from review (gitignore-style syntax). "
+            "Repeatable: --exclude '*.lock' --exclude 'vendored/**'. "
+            "Additive to patterns in <repo>/.pr-review-ignore if present."
+        ),
+    )
     review.add_argument("--rules-dir", type=Path, default=None)
     review.add_argument("--out", type=Path, default=None)
     review.add_argument("--model", default="openrouter:google/gemini-2.5-pro")
@@ -45,9 +59,22 @@ def _estimate_tokens(text: str) -> int:
     return max(1, len(text) // 4)
 
 
+def _load_exclude_spec(repo: Path, cli_excludes: list[str]) -> pathspec.PathSpec:
+    """Build a combined PathSpec from .pr-review-ignore (repo root) + --exclude CLI args."""
+    patterns: list[str] = []
+    ignore_file = repo / ".pr-review-ignore"
+    if ignore_file.exists():
+        patterns.extend(
+            line for line in ignore_file.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        )
+    patterns.extend(cli_excludes)
+    return pathspec.PathSpec.from_lines("gitwildmatch", patterns)
+
+
 async def run_review_command(
     *, base: str | None, budget: int, rules_dir: Path | None, out: Path | None,
-    model: Any,
+    model: Any, exclude: list[str] | None = None,
 ) -> int:
     repo = Path.cwd()
     started_at = datetime.now(timezone.utc)
@@ -67,6 +94,14 @@ async def run_review_command(
         return 2
 
     diff = extract_diff(repo, base=base_ref)
+    exclude_spec = _load_exclude_spec(repo, list(exclude or []))
+    diff, excluded_paths = filter_diff(diff, exclude_spec)
+    if excluded_paths:
+        print(
+            f"Filtered {len(excluded_paths)} file(s) from diff: "
+            f"{', '.join(excluded_paths)}",
+            file=sys.stderr,
+        )
     head, mb = head_sha(repo), merge_base(repo, base_ref)
     branch = current_branch(repo)
 
@@ -86,6 +121,19 @@ async def run_review_command(
     agent = build_agent(model)
     report, usage = await run_review(agent, user_prompt)
 
+    # Layer-2 finding filter: defense-in-depth against a model that returns
+    # findings for paths we asked it to ignore (e.g. context-aware findings
+    # that reference an excluded path's content).
+    kept_findings = []
+    for finding in report.findings:
+        if exclude_spec.match_file(finding.file):
+            print(
+                f"Dropped finding for excluded path: {finding.file}",
+                file=sys.stderr,
+            )
+        else:
+            kept_findings.append(finding)
+
     duration = time.perf_counter() - t0
     metadata = RunMetadata(
         branch=branch, base_ref=base_ref,
@@ -101,7 +149,7 @@ async def run_review_command(
     sealed_report = Report(
         metadata=metadata,
         rules_loaded=[r.rule_id for r in rules],
-        findings=report.findings,
+        findings=kept_findings,
     )
 
     run_dir = prepare_run_dir(repo_root=repo, started_at=started_at, override=out)
@@ -134,7 +182,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "review":
         return asyncio.run(run_review_command(
             base=args.base, budget=args.budget, rules_dir=args.rules_dir,
-            out=args.out, model=args.model,
+            out=args.out, model=args.model, exclude=args.exclude,
         ))
     if args.command == "rules" and args.rules_command == "list":
         return run_rules_list_command()
