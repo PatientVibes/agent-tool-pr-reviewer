@@ -59,6 +59,7 @@ class RunMetadata(BaseModel):
     tokens_output: int
     models: list[str] | None = None
     per_model_usage: dict[str, ModelUsage] | None = None
+    verifier_model: str | None = None
 
 
 class Report(BaseModel):

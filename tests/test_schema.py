@@ -149,3 +149,38 @@ class TestReport:
         payload = report.model_dump_json()
         round_trip = Report.model_validate_json(payload)
         assert round_trip == report
+
+
+def test_run_metadata_verifier_model_roundtrip():
+    """v0.5.0: RunMetadata.verifier_model is an optional string; survives dump+load."""
+    md = RunMetadata(
+        branch="feature/x",
+        base_ref="main",
+        commit_head="abc123",
+        commit_base="def456",
+        started_at=datetime.now(timezone.utc),
+        duration_seconds=1.5,
+        model="openrouter:google/gemini-2.5-pro",
+        tokens_input=100,
+        tokens_output=50,
+        verifier_model="openrouter:anthropic/claude-sonnet-4-6",
+    )
+
+    dumped = md.model_dump_json()
+    reloaded = RunMetadata.model_validate_json(dumped)
+
+    assert reloaded.verifier_model == "openrouter:anthropic/claude-sonnet-4-6"
+
+    md_no_verifier = RunMetadata(
+        branch="feature/x",
+        base_ref="main",
+        commit_head="abc123",
+        commit_base="def456",
+        started_at=datetime.now(timezone.utc),
+        duration_seconds=1.5,
+        model="openrouter:google/gemini-2.5-pro",
+        tokens_input=100,
+        tokens_output=50,
+    )
+    reloaded_no_verifier = RunMetadata.model_validate_json(md_no_verifier.model_dump_json())
+    assert reloaded_no_verifier.verifier_model is None
