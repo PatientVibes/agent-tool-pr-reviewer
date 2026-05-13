@@ -10,7 +10,6 @@ LLM, no I/O.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from typing import Iterable
 
 from pr_reviewer.schema import (
