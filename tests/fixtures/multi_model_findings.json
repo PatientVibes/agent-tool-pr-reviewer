@@ -1,0 +1,114 @@
+{
+  "convergent_3of3": [
+    {
+      "model": "model-a",
+      "finding": {
+        "category": "bug", "severity": "high",
+        "file": "src/auth.py", "line_start": 42, "line_end": 44,
+        "title": "Missing await on async session.commit",
+        "description": "session.commit() is async but not awaited",
+        "evidence": "    session.commit()"
+      }
+    },
+    {
+      "model": "model-b",
+      "finding": {
+        "category": "bug", "severity": "blocker",
+        "file": "src/auth.py", "line_start": 42, "line_end": 42,
+        "title": "Async function not awaited",
+        "description": "The commit call returns a coroutine that's discarded",
+        "evidence": "session.commit()"
+      }
+    },
+    {
+      "model": "model-c",
+      "finding": {
+        "category": "bug", "severity": "medium",
+        "file": "src/auth.py", "line_start": 43, "line_end": 43,
+        "title": "Coroutine discarded — missing await keyword",
+        "description": "Calling an async method without await",
+        "evidence": "    session.commit()"
+      }
+    }
+  ],
+  "convergent_2of3": [
+    {
+      "model": "model-a",
+      "finding": {
+        "category": "bug", "severity": "medium",
+        "file": "src/parse.py", "line_start": 10, "line_end": 12,
+        "title": "Regex flag mishandled",
+        "description": "the :r modifier is misinterpreted",
+        "evidence": "re.compile(pattern, flags=:r)"
+      }
+    },
+    {
+      "model": "model-b",
+      "finding": {
+        "category": "bug", "severity": "high",
+        "file": "src/parse.py", "line_start": 11, "line_end": 11,
+        "title": "Invalid :r regex flag",
+        "description": "Python's re module does not accept :r as a flag",
+        "evidence": "flags=:r"
+      }
+    }
+  ],
+  "singleton_should_drop_at_threshold_2": [
+    {
+      "model": "model-a",
+      "finding": {
+        "category": "bug", "severity": "low",
+        "file": "src/utils.py", "line_start": 5, "line_end": 5,
+        "title": "Variable name shadows builtin",
+        "description": "the variable 'list' shadows the builtin",
+        "evidence": "list = [1, 2]"
+      }
+    }
+  ],
+  "project_rule_cross_line_match": [
+    {
+      "model": "model-a",
+      "finding": {
+        "category": "project_rule", "severity": "medium",
+        "file": "src/api.py", "line_start": 10, "line_end": 10,
+        "rule_id": "no-bare-fences",
+        "title": "Bare fence in API docstring",
+        "description": "code block missing language tag",
+        "evidence": "```"
+      }
+    },
+    {
+      "model": "model-b",
+      "finding": {
+        "category": "project_rule", "severity": "medium",
+        "file": "src/api.py", "line_start": 50, "line_end": 50,
+        "rule_id": "no-bare-fences",
+        "title": "Another bare fence further down",
+        "description": "different location, same rule violation",
+        "evidence": "```"
+      }
+    }
+  ],
+  "different_bugs_same_file_dont_merge": [
+    {
+      "model": "model-a",
+      "finding": {
+        "category": "bug", "severity": "medium",
+        "file": "src/x.py", "line_start": 20, "line_end": 22,
+        "title": "Off-by-one in loop bound",
+        "description": "range should go to n+1 not n",
+        "evidence": "for i in range(n):"
+      }
+    },
+    {
+      "model": "model-b",
+      "finding": {
+        "category": "bug", "severity": "medium",
+        "file": "src/x.py", "line_start": 21, "line_end": 21,
+        "title": "Hardcoded timeout value",
+        "description": "the 30 second timeout should be configurable",
+        "evidence": "timeout=30"
+      }
+    }
+  ]
+}
