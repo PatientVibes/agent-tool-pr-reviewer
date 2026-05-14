@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.1 — 2026-05-14
+
+- **NEW**: tool-use compatibility precheck (Layer 0) — every `review` invocation probes each resolved model (reviewer + consensus basket + verifier) before dispatching the real review. Detected incompatibilities exit 2 with an actionable error.
+- **NEW**: `--skip-precheck` flag for opt-out (e.g., when the probe itself is flaky or you want to deliberately test a known-borderline model).
+- **NEW**: `KNOWN_INCOMPATIBLE` denylist in `src/pr_reviewer/compat.py` seeded with `openrouter:meta-llama/llama-4-maverick` and `openrouter:deepseek/deepseek-r1-distill-qwen-32b` (zero-token short-circuit). Unknown models get a live probe via `Agent.run("ping")` with a nested `ProbeResult` output type that mirrors `Report.findings: list[Finding]`.
+- **Refactor**: `cli.py:main()` now hoists model resolution out of the `if/else` dispatch branches so the precheck sees the full resolved list. Two sequential `asyncio.run` calls (precheck, then dispatch) — pydantic-ai supports this.
+- **Behavior**: classification is `OK` / `DENIED` / `NO_TOOL_SUPPORT` / `AUTH_FAIL` / `OTHER`. The first three trigger exit 2; `OTHER` fails-open with a stderr warning (matches v0.5.0 verifier's philosophy).
+- **Tests**: 21 new tests (16 unit in `test_compat.py` + 5 CLI smoke in `test_cli_precheck_smoke.py`); 11 existing `cli.main([...])` invocations updated with `--skip-precheck` so their reviewer-only fakes aren't validated as `ProbeResult`. 184 total.
+- **Closes**: Tier 2 #5 — the last remaining Tier-2 issue on this repo.
+
 ## 0.5.0 — 2026-05-14
 
 - **NEW**: `--verifier MODEL` flag — Layer-3 precision filter (deterministic gate + LLM judge) runs after consensus + scope filter. Drops findings on evidence-not-verbatim, file-not-in-diff, self-withdrawal, speculation-at-high+blocker, or scope-drift. Off by default. Sugar `--verifier default` expands to `openrouter:anthropic/claude-sonnet-4-6` (cross-family bias resistance; same OpenRouter API key).

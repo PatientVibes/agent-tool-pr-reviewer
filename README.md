@@ -263,6 +263,37 @@ Cost: one Sonnet 4.6 call per run on the surviving bug-category findings. Typica
 
 `--verifier` is off by default. Drop-only verdicts in v0.5.0 (downgrade and description-rewrite verdicts deferred to v0.5.x).
 
+## Troubleshooting: model tool-use support (v0.5.1)
+
+Some OpenRouter model IDs get routed to provider backends that do not support function/tool calling. Pydantic-AI's structured output requires tools, so those routings fail with `404 — "No endpoints found that support tool use."` mid-run.
+
+`agent-tool-pr-reviewer` v0.5.1 auto-runs a tiny tool-use probe on each resolved model (reviewer + every basket member + optional verifier) before the real review dispatches. Detected incompatibilities exit 2 with an actionable error; the reviewer never runs and no tokens are wasted.
+
+Known-incompatible model IDs are denylisted (zero-token short-circuit):
+
+- `openrouter:meta-llama/llama-4-maverick`
+- `openrouter:deepseek/deepseek-r1-distill-qwen-32b`
+
+Newly-discovered bad routings get caught by the live probe — about `$0.001 × N models` per run. Add the known-bad ones to the denylist constant in `src/pr_reviewer/compat.py` when a new one is identified.
+
+Probe outcomes:
+
+| Outcome | Meaning | Action |
+|---|---|---|
+| `OK` | Model supports structured tool-call output | Review proceeds |
+| `DENIED` | Model is on the denylist | Pick a different model |
+| `NO_TOOL_SUPPORT` | Live probe got OpenRouter's tool-use 404 | Pick a different model |
+| `AUTH_FAIL` | `OPENROUTER_API_KEY` is invalid / unset | Check the key |
+| `OTHER` | Probe failed for an ambiguous reason (network, rate limit, unexpected response) | Warned to stderr; review proceeds (fail-open) |
+
+To opt out of the precheck (deliberate experimentation with a borderline model, or if the probe itself is flaky):
+
+```bash
+agent-tool-pr-reviewer review --skip-precheck --model openrouter:experimental/new-model
+```
+
+The probe adds ~1-3 s of latency on a clean run (probes are parallel via `asyncio.gather`).
+
 ## Recommended models
 
 Two trials (16 distinct models, 39 successful runs across 4 chorus-sqlserver PRs) produced this preference order — both for single-model use and for the eventual Tier 2 consensus mode:
