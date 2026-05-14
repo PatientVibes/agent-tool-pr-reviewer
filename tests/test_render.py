@@ -72,3 +72,17 @@ def test_renders_evidence_with_triple_backticks_intact():
     rendered = render_markdown(report)
     expected_block = "````diff\n+```python\n+x = 1\n+```\n````"
     assert expected_block in rendered, f"4-backtick wrapper broken; rendered:\n{rendered}"
+
+
+def test_render_includes_date_guard_row_when_dropped():
+    md = _metadata()
+    metadata_with_drops = md.model_copy(update={"date_guard_dropped": 3})
+    report = Report(metadata=metadata_with_drops, rules_loaded=[], findings=[])
+    out = render_markdown(report)
+    assert "Date-FP guard: dropped 3" in out
+
+
+def test_render_omits_date_guard_row_when_zero():
+    report = Report(metadata=_metadata(), rules_loaded=[], findings=[])
+    out = render_markdown(report)
+    assert "Date-FP guard" not in out
