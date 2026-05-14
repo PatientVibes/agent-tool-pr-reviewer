@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.2 — 2026-05-14
+
+NIT cleanup release — no behavior changes, no API changes.
+
+- **Cleanup**: removed redundant `from pathlib import Path` inside `_apply_verifier_pass` in `cli.py` (already imported at module scope).
+- **Cleanup**: removed unused `asdict` import in `verifier.py` (serialization uses manual dict construction in `serialize_decisions`).
+- **Refactor**: dropped the one-use `use_multi_model` flag in `cli.py:main()`; the dispatch site now reads `len(resolved_review_models) > 1` directly.
+- **Tests**: extracted duplicated `_make_metadata` / `_make_run_metadata` helpers from `test_cli_precheck_smoke.py`, `test_cli_verifier_smoke.py`, and `test_cli_verifier_multi_model_smoke.py` into a single `make_run_metadata` factory in `tests/conftest.py`.
+- **Tests**: added `test_precheck_ok_dispatches_reviewer` — the missing happy-path test (probe returns OK → reviewer dispatches; `[precheck] ... OK` line emits).
+- **Tests**: added `test_run_verifier_pass_all_project_rule_skips_judge` — end-to-end coverage of the zero-bug-survivors path through `run_verifier_pass`. Asserts `build_agent` is never called (proof the judge stage was actually skipped, not just keep-all by coincidence).
+- **Tests**: tightened `probe_outcome: str` to `Literal["OK", "NO_TOOL_SUPPORT", "AUTH_FAIL", "OTHER"]` in `_install_dual_purpose_fakes` for static-analysis catch on typos.
+- **Tests**: 186 total (was 184 at v0.5.1).
+
 ## 0.5.1 — 2026-05-14
 
 - **NEW**: tool-use compatibility precheck (Layer 0) — every `review` invocation probes each resolved model (reviewer + consensus basket + verifier) before dispatching the real review. Detected incompatibilities exit 2 with an actionable error.

@@ -1,33 +1,23 @@
 """G6/G7/G8 CLI smoke tests for v0.5.1 tool-use precheck."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from typing import Literal
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from pr_reviewer import cli
 from pr_reviewer.compat import ProbeItem, ProbeResult
-from pr_reviewer.schema import Finding, Report, RunMetadata
+from pr_reviewer.schema import Report
+from tests.conftest import make_run_metadata
 
 
-def _make_metadata(model: str) -> RunMetadata:
-    return RunMetadata(
-        branch="feature/x",
-        base_ref="main",
-        commit_head="abc123",
-        commit_base="def456",
-        started_at=datetime.now(timezone.utc),
-        duration_seconds=0.1,
-        model=model,
-        tokens_input=100,
-        tokens_output=50,
-    )
+ProbeOutcome = Literal["OK", "NO_TOOL_SUPPORT", "AUTH_FAIL", "OTHER"]
 
 
 def _make_reviewer_report() -> Report:
     return Report(
-        metadata=_make_metadata("fake-reviewer"),
+        metadata=make_run_metadata(),
         rules_loaded=[],
         findings=[],
     )
@@ -47,7 +37,7 @@ def _install_diff_fakes(monkeypatch, tmp_path):
 
 def _install_dual_purpose_fakes(
     monkeypatch,
-    probe_outcome: str = "OK",
+    probe_outcome: ProbeOutcome = "OK",
     reviewer_called_ref: list | None = None,
 ):
     """Replace build_agent with a fake that handles BOTH the precheck probe call
@@ -175,6 +165,28 @@ def test_skip_precheck_bypasses_and_invokes_reviewer(monkeypatch, tmp_path, caps
     assert exit_code == 0
     err = capsys.readouterr().err
     assert "[precheck]" not in err  # no precheck stderr at all
+
+
+def test_precheck_ok_dispatches_reviewer(monkeypatch, tmp_path, capsys):
+    """Happy path: probe returns OK and the reviewer is invoked normally; the
+    [precheck] OK line appears on stderr; exit 0 since the canned reviewer
+    report has zero findings."""
+    reviewer_calls: list = []
+    _install_dual_purpose_fakes(monkeypatch, probe_outcome="OK", reviewer_called_ref=reviewer_calls)
+    _install_diff_fakes(monkeypatch, tmp_path)
+
+    exit_code = cli.main([
+        "review",
+        "--model", "openrouter:google/gemini-2.5-pro",
+        "--out", str(tmp_path / "out"),
+        "--budget", "100000",
+    ])
+    assert exit_code == 0
+    assert reviewer_calls == ["openrouter:google/gemini-2.5-pro"]
+    err = capsys.readouterr().err
+    assert "[precheck]" in err
+    assert "OK" in err
+    assert "DENIED" not in err
 
 
 def test_other_outcome_warns_and_continues(monkeypatch, tmp_path, capsys):

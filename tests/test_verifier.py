@@ -280,3 +280,51 @@ def test_build_verifier_user_prompt_zero_findings_still_valid():
     prompt = _build_verifier_user_prompt("(no diff)", [])
     assert "## Findings" in prompt
     assert "0 total findings" in prompt or "(N total" not in prompt
+
+
+# ---------- run_verifier_pass: all-project_rule path ----------
+
+from pr_reviewer.verifier import run_verifier_pass
+
+
+async def test_run_verifier_pass_all_project_rule_skips_judge(monkeypatch, capsys):
+    """All inputs are project_rule findings that pass the deterministic gate.
+
+    Expected:
+      - judge stage is skipped (project_rule findings don't go through the LLM judge)
+      - all findings returned as kept, dropped is empty, usage is 0/0
+      - build_agent is never called (proof the judge stage was actually skipped,
+        not just keep-all by coincidence)
+      - the '[verifier] judge: skipped (0 bug-category survivors; ...)' line emits
+    """
+    def _fail_if_called(*args, **kwargs):
+        raise AssertionError(
+            "build_agent must not be called when all survivors are project_rule"
+        )
+    monkeypatch.setattr("pr_reviewer.verifier.build_agent", _fail_if_called)
+
+    findings = [
+        _make_finding(
+            file="src/foo.py", evidence="+def foo():",
+            category="project_rule", rule_id="prefer-pure-functions",
+        ),
+        _make_finding(
+            file="src/foo.py", evidence="+    return 1",
+            category="project_rule", rule_id="explicit-return",
+        ),
+    ]
+
+    kept, dropped, usage = await run_verifier_pass(
+        verifier_model="never-called",
+        diff_text=SIMPLE_DIFF,
+        kept_findings=findings,
+        budget=100000,
+    )
+
+    assert kept == findings
+    assert dropped == []
+    assert usage.tokens_input == 0
+    assert usage.tokens_output == 0
+    err = capsys.readouterr().err
+    assert "[verifier] judge: skipped" in err
+    assert "0 bug-category survivors" in err

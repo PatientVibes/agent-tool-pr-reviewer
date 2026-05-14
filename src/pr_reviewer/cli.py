@@ -166,7 +166,6 @@ async def _apply_verifier_pass(
     """
     if verifier_model is None:
         return (kept_findings, [], None, None)
-    from pathlib import Path
 
     print(f"[verifier] starting {verifier_model}", file=sys.stderr)
     post_kept, dropped, usage = await run_verifier_pass(
@@ -539,10 +538,8 @@ def main(argv: list[str] | None = None) -> int:
             except ValueError as exc:
                 print(f"error: --models: {exc}", file=sys.stderr)
                 return 2
-            use_multi_model = True
         else:
             resolved_review_models = [args.model or "openrouter:google/gemini-2.5-pro"]
-            use_multi_model = False
         # v0.5.1: precheck (Layer 0) — runs unless --skip-precheck
         if not args.skip_precheck:
             models_to_check = list(resolved_review_models)
@@ -552,7 +549,7 @@ def main(argv: list[str] | None = None) -> int:
             if precheck_exit is not None:
                 return precheck_exit
         # Dispatch
-        if use_multi_model:
+        if len(resolved_review_models) > 1:
             return asyncio.run(run_multi_model_review_command(
                 base=args.base, budget=args.budget, rules_dir=args.rules_dir,
                 out=args.out, models=resolved_review_models,

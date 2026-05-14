@@ -1,8 +1,28 @@
 import subprocess
 from collections.abc import Callable
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+
+from pr_reviewer.schema import RunMetadata
+
+
+def make_run_metadata(model: str = "fake-reviewer") -> RunMetadata:
+    """Build a RunMetadata stub for CLI smoke tests. Single source of truth shared
+    by tests/test_cli_precheck_smoke.py, tests/test_cli_verifier_smoke.py, and
+    tests/test_cli_verifier_multi_model_smoke.py."""
+    return RunMetadata(
+        branch="feature/x",
+        base_ref="main",
+        commit_head="abc123",
+        commit_base="def456",
+        started_at=datetime.now(timezone.utc),
+        duration_seconds=0.1,
+        model=model,
+        tokens_input=100,
+        tokens_output=50,
+    )
 
 
 @pytest.fixture

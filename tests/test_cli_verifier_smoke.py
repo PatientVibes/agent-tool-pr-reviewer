@@ -2,15 +2,15 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from pr_reviewer import cli
-from pr_reviewer.schema import Finding, Report, RunMetadata
+from pr_reviewer.schema import Finding, Report
 from pr_reviewer.verifier import VerdictBatch, VerdictItem
+from tests.conftest import make_run_metadata
 
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "verifier_findings.json"
@@ -21,24 +21,10 @@ def canned():
     return json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
 
 
-def _make_run_metadata() -> RunMetadata:
-    return RunMetadata(
-        branch="feature/x",
-        base_ref="main",
-        commit_head="abc123",
-        commit_base="def456",
-        started_at=datetime.now(timezone.utc),
-        duration_seconds=0.1,
-        model="fake-reviewer",
-        tokens_input=100,
-        tokens_output=50,
-    )
-
-
 def _make_reviewer_report(canned) -> Report:
     findings = [Finding.model_validate(f) for f in canned["canned_reviewer_findings"]]
     return Report(
-        metadata=_make_run_metadata(),
+        metadata=make_run_metadata(),
         rules_loaded=[],
         findings=findings,
     )
