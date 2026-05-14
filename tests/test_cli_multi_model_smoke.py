@@ -223,3 +223,66 @@ def test_model_and_models_flags_mutually_exclusive(fixture_repo, capsys):
     assert exit_code == 2
     err = capsys.readouterr().err
     assert "mutually exclusive" in err.lower()
+
+
+def test_cli_multi_model_drops_clustered_date_fp(fixture_repo, monkeypatch, tmp_path):
+    """Two basket members both emit a clustering date-FP; consensus merges
+    them above threshold; the guard drops the merged finding;
+    date_guard_dropped is correctly threaded through update_dict at the
+    multi-model RunMetadata construction site.
+
+    Both models emit a finding at (file=docs/x.md, line 1-1). The evidence
+    contains a recent date (2026-05-09) and the description contains the
+    keyword "likely a typo", satisfying the two-signal AND gate in date_guard.
+    After consensus.merge_reports clusters them (agreement_count=2 >= threshold
+    of 2), the guard drops the merged finding. Result: 0 findings in
+    findings.json, 1 entry in dropped-by-date-guard.json, and
+    metadata.date_guard_dropped == 1.
+    """
+    date_fp_finding_a = Finding(
+        category="bug", severity="high",
+        file="docs/x.md", line_start=1, line_end=1,
+        title="Future date used as version marker",
+        description="The date 2026-05-09 is likely a typo or future date",
+        evidence="version = '2026-05-09'",
+    )
+    date_fp_finding_b = Finding(
+        category="bug", severity="high",
+        file="docs/x.md", line_start=1, line_end=1,
+        title="Version date appears future",
+        description="2026-05-09 is likely a typo in the version field",
+        evidence="version = '2026-05-09'",
+    )
+    per_model_findings = {
+        "fake-a": [date_fp_finding_a],
+        "fake-b": [date_fp_finding_b],
+    }
+    monkeypatch.setattr(
+        "pr_reviewer.cli.build_agent",
+        _build_canned_agents_dispatch(per_model_findings),
+    )
+
+    out_dir = fixture_repo / "out_date_fp"
+    exit_code = cli.main([
+        "review",
+        "--skip-precheck",
+        "--models", "fake-a,fake-b",
+        "--consensus", "2",
+        "--out", str(out_dir),
+    ])
+    assert exit_code == 0  # no blockers survive
+
+    findings_json = json.loads((out_dir / "findings.json").read_text(encoding="utf-8"))
+    # The merged date-FP was dropped — 0 findings survive
+    assert len(findings_json["findings"]) == 0, (
+        f"expected 0 findings after date-FP guard; got {findings_json['findings']}"
+    )
+    # Dropped sidecar was written with 1 entry
+    dropped_path = out_dir / "dropped-by-date-guard.json"
+    assert dropped_path.exists(), "dropped-by-date-guard.json should exist"
+    dropped = json.loads(dropped_path.read_text(encoding="utf-8"))
+    assert len(dropped) == 1, f"expected 1 dropped entry; got {dropped}"
+    # date_guard_dropped is correctly threaded through update_dict
+    assert findings_json["metadata"]["date_guard_dropped"] == 1, (
+        f"expected metadata.date_guard_dropped == 1; got {findings_json['metadata']}"
+    )
