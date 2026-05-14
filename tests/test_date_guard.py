@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 from datetime import date
-from pathlib import Path
 
 import pytest
 
@@ -13,7 +12,7 @@ from pr_reviewer.date_guard import (
     KEYWORD_ALLOWLIST,
     is_date_fp,
     run_date_guard,
-    serialize_decisions,
+    serialize_date_guard_decisions,
 )
 from pr_reviewer.schema import Finding
 
@@ -170,19 +169,18 @@ def test_run_date_guard_partitions():
     assert drops[0].finding == fp
 
 
-# --- serialize_decisions schema check ---
+# --- serialize_date_guard_decisions schema check ---
 
-def test_serialize_decisions_schema(tmp_path: Path):
+def test_serialize_date_guard_decisions_schema():
     fp = _finding(
         evidence="Doc references 2026-05-09.",
         description="This is a future date typo.",
     )
     decision = is_date_fp(fp, TODAY)
     assert decision is not None
-    out = tmp_path / "dropped-by-date-guard.json"
-    serialize_decisions([decision], out)
+    payload_json = serialize_date_guard_decisions([decision])
 
-    data = json.loads(out.read_text(encoding="utf-8"))
+    data = json.loads(payload_json)
     assert isinstance(data, list)
     assert len(data) == 1
     entry = data[0]

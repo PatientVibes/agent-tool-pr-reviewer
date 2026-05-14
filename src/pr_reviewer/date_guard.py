@@ -17,7 +17,6 @@ import re
 import sys
 from dataclasses import dataclass
 from datetime import date, timedelta
-from pathlib import Path
 
 from pr_reviewer.schema import Finding
 
@@ -109,8 +108,12 @@ def run_date_guard(
     return survivors, drops
 
 
-def serialize_decisions(decisions: list[DateGuardDecision], path: Path) -> None:
-    """Write the JSON sidecar at <run_dir>/dropped-by-date-guard.json."""
+def serialize_date_guard_decisions(decisions: list[DateGuardDecision]) -> str:
+    """Render a DateGuardDecision list as the dropped-by-date-guard.json payload.
+
+    Returns a JSON string ready to write to disk. Used by cli.py to write
+    <run_dir>/dropped-by-date-guard.json. Mirrors verifier.serialize_decisions.
+    """
     payload = [
         {
             "finding": d.finding.model_dump(mode="json"),
@@ -120,4 +123,4 @@ def serialize_decisions(decisions: list[DateGuardDecision], path: Path) -> None:
         }
         for d in decisions
     ]
-    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return json.dumps(payload, indent=2)
