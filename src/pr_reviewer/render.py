@@ -49,6 +49,8 @@ def render_markdown(report: Report) -> str:
         # The last _render_finding leaves a trailing "---", "" that serves as the
         # separator before the footer — so we do NOT emit another "---" here.
 
+    if md.date_guard_dropped > 0:
+        lines.append(f"_Date-FP guard: dropped {md.date_guard_dropped}_")
     lines.append(f"_Tokens: in={md.tokens_input}, out={md.tokens_output}_")
     lines.append("")
     return "\n".join(lines)

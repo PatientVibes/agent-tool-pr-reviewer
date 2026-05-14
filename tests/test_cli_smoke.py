@@ -1,10 +1,14 @@
 import json
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from pydantic_ai.models.test import TestModel
 
+from pr_reviewer import cli
 from pr_reviewer.cli import build_parser, run_review_command, run_rules_list_command
+from pr_reviewer.schema import Finding, Report
+from tests.conftest import make_run_metadata
 
 
 def _stub_test_model(report_dict: dict) -> TestModel:
@@ -264,3 +268,120 @@ async def test_cli_no_exclude_is_noop(
     findings_data = json.loads((out_dir / "findings.json").read_text(encoding="utf-8"))
     paths_in_output = [f["file"] for f in findings_data["findings"]]
     assert "tests/fixtures/generated.sql" in paths_in_output
+
+
+# ---------------------------------------------------------------------------
+# Date-FP guard smoke tests (v0.5.3)
+# ---------------------------------------------------------------------------
+
+def _make_two_finding_report() -> Report:
+    """One date-FP finding and one real bug finding."""
+    date_fp = Finding(
+        file="docs/x.md",
+        line_start=1, line_end=1,
+        severity="low", category="bug",
+        title="future date",
+        description="This is a future date typo that should be corrected.",
+        evidence="The doc references 2026-05-09 prominently.",
+    )
+    real_bug = Finding(
+        file="src/foo.py",
+        line_start=10, line_end=10,
+        severity="high", category="bug",
+        title="null deref",
+        description="x is None here; calling .foo() raises AttributeError.",
+        evidence="x = None\nx.foo()",
+    )
+    return Report(
+        metadata=make_run_metadata(),
+        rules_loaded=[],
+        findings=[date_fp, real_bug],
+    )
+
+
+def _install_date_guard_fakes(monkeypatch, tmp_path):
+    """Install minimal monkeypatches: stub diff funcs + fake build_agent returning the
+    two-finding report. Does NOT monkeypatch the date guard itself — we want the real
+    guard to fire so we can verify it drops the date-FP finding."""
+    report = _make_two_finding_report()
+
+    async def _run_reviewer(prompt):
+        result = MagicMock()
+        result.output = report
+        usage_mock = MagicMock()
+        usage_mock.input_tokens = 100
+        usage_mock.output_tokens = 50
+        result.usage = MagicMock(return_value=usage_mock)
+        return result
+
+    def _fake_build_agent(model, *, output_type, system_prompt):
+        agent = MagicMock()
+        agent.run = AsyncMock(side_effect=_run_reviewer)
+        return agent
+
+    monkeypatch.setattr("pr_reviewer.cli.build_agent", _fake_build_agent)
+    monkeypatch.setattr("pr_reviewer.agent.build_agent", _fake_build_agent)
+
+    # Stub git-touching functions
+    diff_text = "+x = None\n+x.foo()"
+    monkeypatch.setattr("pr_reviewer.cli.resolve_base_ref", lambda repo, explicit=None: "main")
+    monkeypatch.setattr("pr_reviewer.cli.extract_diff", lambda repo, base: diff_text)
+    monkeypatch.setattr("pr_reviewer.cli.filter_diff", lambda diff, spec: (diff, []))
+    monkeypatch.setattr("pr_reviewer.cli.head_sha", lambda repo: "abc1234567890")
+    monkeypatch.setattr("pr_reviewer.cli.merge_base", lambda repo, base: "def4567890123")
+    monkeypatch.setattr("pr_reviewer.cli.current_branch", lambda repo: "feature/x")
+    monkeypatch.chdir(tmp_path)
+
+
+def test_cli_single_model_drops_date_fp(monkeypatch, tmp_path):
+    """Date-FP finding dropped; real bug survives; sidecar written; metadata set."""
+    _install_date_guard_fakes(monkeypatch, tmp_path)
+
+    out_dir = tmp_path / "out"
+    exit_code = cli.main([
+        "review",
+        "--skip-precheck",
+        "--model", "fake-reviewer",
+        "--out", str(out_dir),
+        "--budget", "100000",
+    ])
+
+    assert exit_code == 0  # only survivor is "high" (not blocker)
+
+    findings_data = json.loads((out_dir / "findings.json").read_text(encoding="utf-8"))
+    titles = [f["title"] for f in findings_data["findings"]]
+    assert titles == ["null deref"], f"Expected only the real bug to survive; got: {titles}"
+
+    assert findings_data["metadata"]["date_guard_dropped"] == 1
+
+    sidecar = out_dir / "dropped-by-date-guard.json"
+    assert sidecar.exists(), "dropped-by-date-guard.json should have been written"
+    sidecar_data = json.loads(sidecar.read_text(encoding="utf-8"))
+    assert len(sidecar_data) == 1
+    assert sidecar_data[0]["matched_keyword"] == "future date"
+
+
+def test_cli_single_model_no_date_guard_opt_out(monkeypatch, tmp_path):
+    """--no-date-guard preserves the FP finding."""
+    _install_date_guard_fakes(monkeypatch, tmp_path)
+
+    out_dir = tmp_path / "out"
+    exit_code = cli.main([
+        "review",
+        "--skip-precheck",
+        "--model", "fake-reviewer",
+        "--out", str(out_dir),
+        "--budget", "100000",
+        "--no-date-guard",
+    ])
+
+    assert exit_code == 0  # highest severity is "high" (not blocker)
+
+    findings_data = json.loads((out_dir / "findings.json").read_text(encoding="utf-8"))
+    titles = [f["title"] for f in findings_data["findings"]]
+    assert set(titles) == {"future date", "null deref"}, f"Both findings should survive; got: {titles}"
+
+    assert findings_data["metadata"]["date_guard_dropped"] == 0
+
+    sidecar = out_dir / "dropped-by-date-guard.json"
+    assert not sidecar.exists(), "dropped-by-date-guard.json should NOT exist with --no-date-guard"

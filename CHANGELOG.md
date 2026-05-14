@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.5.3 — 2026-05-14
+
+**Feature: date-FP guard.** New deterministic post-LLM filter drops "future date / typo" findings whose evidence contains an ISO date in `(today - 730 days, today)` AND whose description contains a known future-date/typo keyword. Eliminates the Gemini training-cutoff false-positive class without paying `--verifier default`'s ~$0.05/run.
+
+- **NEW**: `src/pr_reviewer/date_guard.py` module (~120 LOC). Public API: `DATE_GUARD_RECENT_WINDOW_DAYS = 730`; `KEYWORD_ALLOWLIST` (5 empirical phrases: `"future date"`, `"future-date"`, `"date in the future"`, `"likely a typo"`, `"appears to be a typo"`); `ISO_DATE_RE` with anti-partial-match lookarounds; `DateGuardDecision` dataclass; `is_date_fp(finding, today)`; `run_date_guard(findings, today=None)`; `serialize_date_guard_decisions(decisions) -> str` (matches `verifier.serialize_decisions` str-return pattern).
+- **NEW**: `--no-date-guard` CLI flag (default `False`; opt-out, mirrors `--skip-precheck` style). Skips the guard call entirely; no sidecar written when set.
+- **NEW**: `RunMetadata.date_guard_dropped: int = 0` field (additive-optional, `schema_version` stays `"3"` per the v0.5.0 `verifier_model` precedent).
+- **Pipeline**: guard runs BEFORE the verifier; drops are final. Both single-model (`run_review_command`) and consensus (`run_multi_model_review_command`) paths wired. In consensus mode, the guard sees one pass on the merged `Report.findings`, not per-model. `--include-uncorroborated`'s `uncorroborated.json` passes through unfiltered by design.
+- **Sidecar**: `<run_dir>/dropped-by-date-guard.json` written when drops > 0. Schema: `[{finding: {...full Finding...}, drop_reason: "model_knowledge_cutoff", matched_keyword: "...", matched_date: "ISO-8601"}]`.
+- **Render**: stdout summary grows a conditional `_Date-FP guard: dropped N_` footer row when N > 0; omitted at zero.
+- **Tests**: 23 new (5 parametrized + 14 named in `tests/test_date_guard.py`; 2 in `tests/test_render.py`; 2 single-model smoke + 1 multi-model smoke in `tests/test_cli_smoke.py` and `tests/test_cli_multi_model_smoke.py`). Total: 210 tests.
+- **Known FN**: `consensus._merge_group` keeps `longest_evidence` and concatenates descriptions. If the longest-evidence sibling lacks the ISO date but a shorter sibling had it, the merged finding loses the date signal — the guard misses (intentional FN, pinned by `test_asymmetric_merge_fn_pinned`). Revisit in v0.5.4+ if real-world data shows this class is meaningful.
+- **Co-plan**: Gemini 2.5-pro was rate-limited at planning time; opencode → Kimi K2.6 ran the critique pass. 2 CRITICAL + 4 IMPORTANT findings (step ordering, `"should be 20"` too broad, constraint phrasing, asymmetric-merge FN, multi-model smoke gap, render-test gap) all addressed before implementation began.
+- **Spec**: [`2026-05-14-pr-reviewer-v0.5.3-date-fp-guard-design.md`](https://github.com/PatientVibes/ai-agents/blob/master/docs/superpowers/specs/2026-05-14-pr-reviewer-v0.5.3-date-fp-guard-design.md). **Plan**: [`2026-05-14-pr-reviewer-v0.5.3-date-fp-guard.md`](https://github.com/PatientVibes/ai-agents/blob/master/docs/superpowers/plans/2026-05-14-pr-reviewer-v0.5.3-date-fp-guard.md).
+
 ## 0.5.2 — 2026-05-14
 
 NIT cleanup release — no behavior changes, no API changes.

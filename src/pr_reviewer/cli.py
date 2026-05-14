@@ -11,9 +11,12 @@ from typing import Any
 
 import pathspec
 
+from datetime import date as _date
+
 from pr_reviewer import __version__
 from pr_reviewer.agent import build_agent, run_review
 from pr_reviewer.compat import precheck_and_exit_if_bad
+from pr_reviewer.date_guard import run_date_guard, serialize_date_guard_decisions
 from pr_reviewer.consensus import (
     DEFAULT_BASKET, PerModelResult, merge_reports, resolve_models_arg,
 )
@@ -112,6 +115,17 @@ def build_parser() -> argparse.ArgumentParser:
             "deliberately attempt a known-borderline model."
         ),
     )
+    review.add_argument(
+        "--no-date-guard",
+        action="store_true",
+        default=False,
+        help=(
+            "Skip the date-FP guard (v0.5.3). By default, findings whose evidence "
+            "contains an ISO date in (today-730d, today) AND whose description "
+            "contains a known future-date/typo keyword are dropped as Gemini-style "
+            "training-cutoff false positives."
+        ),
+    )
 
     rules = sub.add_parser("rules", help="Rules subcommands")
     rules_sub = rules.add_subparsers(dest="rules_command", required=True)
@@ -188,6 +202,7 @@ async def run_review_command(
     *, base: str | None, budget: int, rules_dir: Path | None, out: Path | None,
     model: Any, exclude: list[str] | None = None,
     verifier_model: str | None = None,
+    no_date_guard: bool = False,
 ) -> int:
     repo = Path.cwd()
     started_at = datetime.now(timezone.utc)
@@ -247,10 +262,23 @@ async def run_review_command(
         else:
             kept_findings.append(finding)
 
+    # Date-FP guard (v0.5.3) — deterministic filter before the verifier and
+    # before RunMetadata construction. Drops findings whose evidence contains a
+    # recent ISO date AND whose description contains a known future-date keyword.
+    # Skipped when --no-date-guard is passed.
+    date_guard_drop_count = 0
+    run_dir = prepare_run_dir(repo_root=repo, started_at=started_at, override=out)
+    if not no_date_guard:
+        kept_findings, date_guard_drops = run_date_guard(kept_findings, _date.today())
+        if date_guard_drops:
+            (run_dir / "dropped-by-date-guard.json").write_text(
+                serialize_date_guard_decisions(date_guard_drops), encoding="utf-8",
+            )
+        date_guard_drop_count = len(date_guard_drops)
+
     # Layer-3 verifier (new in v0.5.0) — no-op when verifier_model is None.
     # Must run before RunMetadata is built so the helper can write the sidecar
     # to the same run_dir, and so we can set RunMetadata.verifier_model.
-    run_dir = prepare_run_dir(repo_root=repo, started_at=started_at, override=out)
     kept_findings, _dropped, verifier_usage, used_verifier_model = await _apply_verifier_pass(
         verifier_model=verifier_model,
         diff_text=diff,
@@ -276,6 +304,7 @@ async def run_review_command(
         tokens_input=total_in,
         tokens_output=total_out,
         verifier_model=used_verifier_model,
+        date_guard_dropped=date_guard_drop_count,
     )
     # rules_loaded is determined deterministically from disk, NOT trusted from
     # the LLM. The model may hallucinate rule_ids; the CLI is the source of
@@ -343,6 +372,7 @@ async def run_multi_model_review_command(
     models: list[str], consensus_threshold: int, include_uncorroborated: bool,
     exclude: list[str] | None = None,
     verifier_model: str | None = None,
+    no_date_guard: bool = False,
 ) -> int:
     repo = Path.cwd()
     started_at = datetime.now(timezone.utc)
@@ -426,8 +456,21 @@ async def run_multi_model_review_command(
         else:
             kept_findings.append(finding)
 
-    # Layer-3 verifier (new in v0.5.0) — no-op when verifier_model is None.
+    # Date-FP guard (v0.5.3) — runs on merged consensus output, before the
+    # verifier. Drops findings whose evidence contains a recent ISO date AND
+    # whose description contains a known future-date keyword. Mirrors the
+    # single-model path placement. Skipped when --no-date-guard is passed.
+    date_guard_drop_count = 0
     run_dir = prepare_run_dir(repo_root=repo, started_at=started_at, override=out)
+    if not no_date_guard:
+        kept_findings, date_guard_drops = run_date_guard(kept_findings, _date.today())
+        if date_guard_drops:
+            (run_dir / "dropped-by-date-guard.json").write_text(
+                serialize_date_guard_decisions(date_guard_drops), encoding="utf-8",
+            )
+        date_guard_drop_count = len(date_guard_drops)
+
+    # Layer-3 verifier (new in v0.5.0) — no-op when verifier_model is None.
     kept_findings, _dropped, verifier_usage, used_verifier_model = await _apply_verifier_pass(
         verifier_model=verifier_model,
         diff_text=diff,
@@ -443,6 +486,7 @@ async def run_multi_model_review_command(
         "commit_head": head, "commit_base": mb,
         "started_at": started_at, "duration_seconds": duration,
         "verifier_model": used_verifier_model,
+        "date_guard_dropped": date_guard_drop_count,
     }
     if verifier_usage is not None:
         update_dict["tokens_input"] = merged_report.metadata.tokens_input + verifier_usage.tokens_input
@@ -557,11 +601,13 @@ def main(argv: list[str] | None = None) -> int:
                 include_uncorroborated=args.include_uncorroborated,
                 exclude=args.exclude,
                 verifier_model=verifier_model,
+                no_date_guard=args.no_date_guard,
             ))
         return asyncio.run(run_review_command(
             base=args.base, budget=args.budget, rules_dir=args.rules_dir,
             out=args.out, model=resolved_review_models[0], exclude=args.exclude,
             verifier_model=verifier_model,
+            no_date_guard=args.no_date_guard,
         ))
     if args.command == "rules" and args.rules_command == "list":
         return run_rules_list_command()
