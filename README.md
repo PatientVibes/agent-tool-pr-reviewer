@@ -13,7 +13,7 @@ uv tool install --editable D:/agent-tool-pr-reviewer
 Verify:
 
 ```bash
-agent-tool-pr-reviewer --version    # 0.3.0
+agent-tool-pr-reviewer --version    # 0.5.3
 ```
 
 The default model is `openrouter:google/gemini-2.5-pro`, which expects `OPENROUTER_API_KEY` in the environment. See "Recommended models" below for the rationale and alternatives.
@@ -229,6 +229,44 @@ Writes below-threshold findings to `<run-dir>/uncorroborated.json` alongside `fi
 - Per-model timeout is 30 minutes (Kimi K2.6 observed at 22 min on 50K-token diffs).
 - `--model` and `--models` are mutually exclusive. The single-model `--model` path is unchanged.
 - `.pr-review-ignore` and `--exclude` apply ONCE before dispatch — all N models see the same filtered diff.
+
+## Date-FP guard (v0.5.3)
+
+`agent-tool-pr-reviewer` v0.5.3 ships a deterministic post-LLM filter that drops "future date / typo" findings whose `evidence` contains a recent ISO date AND whose `description` contains a known future-date/typo keyword. This eliminates the Gemini-style training-cutoff false-positive class — model says "this 2026 date is a typo" about a date the model can't yet know is real — without paying `--verifier default`'s ~$0.05/run.
+
+Two-signal AND gate:
+
+1. **Date signal**: `evidence` contains an ISO-8601 date in the half-open interval `(today - 730 days, today)`. Ancient dates (e.g. 1979) pass through; genuine future dates pass through (the model may be flagging a real typo).
+2. **Keyword signal**: `description` (case-insensitive) contains one of: `"future date"`, `"future-date"`, `"date in the future"`, `"likely a typo"`, `"appears to be a typo"`.
+
+Both required → drop. Either alone → keep.
+
+The guard runs once after `consensus.merge_reports()` (or directly after the agent run in single-model mode), BEFORE the verifier. Drops are final; the verifier never re-evaluates a guard-dropped finding. `--include-uncorroborated`'s `uncorroborated.json` passes through unfiltered by design.
+
+```bash
+# Default: guard ON
+agent-tool-pr-reviewer review
+
+# Opt-out: keep date findings (for users who want to see Gemini's full output)
+agent-tool-pr-reviewer review --no-date-guard
+```
+
+Drops are written to `<run-dir>/dropped-by-date-guard.json`:
+
+```json
+[
+  {
+    "finding": { "...full Finding..." },
+    "drop_reason": "model_knowledge_cutoff",
+    "matched_keyword": "future date",
+    "matched_date": "2026-05-09"
+  }
+]
+```
+
+`RunMetadata.date_guard_dropped: int` records the count. The stdout summary grows a `_Date-FP guard: dropped N_` row when N > 0; omitted when zero.
+
+Known FN: `consensus._merge_group` keeps the longest evidence quote. If the longest-evidence cluster member lacked the ISO date but a shorter sibling had it, the merged finding loses the date signal — the guard misses. Pinned by `test_asymmetric_merge_fn_pinned`; revisit in v0.5.4+ if real-world data shows this class is meaningful.
 
 ## Verifier pass (v0.5.0)
 
