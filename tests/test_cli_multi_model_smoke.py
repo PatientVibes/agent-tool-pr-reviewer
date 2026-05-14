@@ -225,7 +225,7 @@ def test_model_and_models_flags_mutually_exclusive(fixture_repo, capsys):
     assert "mutually exclusive" in err.lower()
 
 
-def test_cli_multi_model_drops_clustered_date_fp(fixture_repo, monkeypatch, tmp_path):
+def test_cli_multi_model_drops_clustered_date_fp(fixture_repo, monkeypatch):
     """Two basket members both emit a clustering date-FP; consensus merges
     them above threshold; the guard drops the merged finding;
     date_guard_dropped is correctly threaded through update_dict at the
