@@ -60,6 +60,7 @@ class RunMetadata(BaseModel):
     models: list[str] | None = None
     per_model_usage: dict[str, ModelUsage] | None = None
     verifier_model: str | None = None
+    date_guard_dropped: int = 0
 
 
 class Report(BaseModel):
