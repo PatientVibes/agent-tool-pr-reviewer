@@ -18,9 +18,12 @@ from pr_reviewer.schema import (
 
 
 DEFAULT_BASKET: tuple[str, ...] = (
-    "openrouter:google/gemini-2.5-pro",
-    "openrouter:moonshotai/kimi-k2.6",
-    "openrouter:deepseek/deepseek-chat-v3.1",
+    # Code-review/PR consensus basket: Logic Auditor + Rigorous Executor +
+    # Monorepo Synthesizer. Replaced the prior trio (2026-06) after
+    # google/gemini-2.5-pro began returning finish_reason=None upstream.
+    "openrouter:anthropic/claude-opus-4.7",
+    "openrouter:openai/gpt-5.3-codex",
+    "openrouter:google/gemini-3.1-pro-preview",
 )
 
 JACCARD_THRESHOLD = 0.3

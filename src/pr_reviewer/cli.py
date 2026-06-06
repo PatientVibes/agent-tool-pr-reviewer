@@ -583,7 +583,10 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"error: --models: {exc}", file=sys.stderr)
                 return 2
         else:
-            resolved_review_models = [args.model or "openrouter:google/gemini-2.5-pro"]
+            # No --models given: a single --model overrides; otherwise default to
+            # the DEFAULT_BASKET consensus (the prior single google/gemini-2.5-pro
+            # default broke upstream — finish_reason=None).
+            resolved_review_models = [args.model] if args.model else list(DEFAULT_BASKET)
         # v0.5.1: precheck (Layer 0) — runs unless --skip-precheck
         if not args.skip_precheck:
             models_to_check = list(resolved_review_models)
