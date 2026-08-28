@@ -107,24 +107,6 @@ def test_single_model_bad_model_exits_2_before_reviewer(monkeypatch, tmp_path, c
     assert "openrouter:meta-llama/llama-4-maverick" in err
 
 
-def test_multi_model_one_bad_member_exits_2(monkeypatch, tmp_path, capsys):
-    """G6: multi-model basket where one entry is denylisted -> exit 2."""
-    reviewer_calls: list = []
-    _install_dual_purpose_fakes(monkeypatch, probe_outcome="OK", reviewer_called_ref=reviewer_calls)
-    _install_diff_fakes(monkeypatch, tmp_path)
-
-    exit_code = cli.main([
-        "review",
-        "--models", "openrouter:google/gemini-2.5-pro,openrouter:meta-llama/llama-4-maverick",
-        "--out", str(tmp_path / "out"),
-        "--budget", "100000",
-    ])
-    assert exit_code == 2
-    assert reviewer_calls == []
-    err = capsys.readouterr().err
-    assert "DENIED" in err
-
-
 def test_bad_verifier_model_exits_2_even_when_reviewer_is_good(monkeypatch, tmp_path, capsys):
     """G8: --verifier of a denylisted model exits 2; reviewer is never invoked
     even though it would have been compatible."""

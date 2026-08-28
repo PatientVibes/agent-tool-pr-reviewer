@@ -1,4 +1,4 @@
-"""Verifier pass — Layer 3 precision filter on top of consensus + scope filter.
+"""Verifier pass — Layer 3 precision filter on top of the scope + date-FP filters.
 
 Two-stage pipeline:
 
@@ -28,9 +28,11 @@ from pr_reviewer.agent import build_agent
 from pr_reviewer.schema import Category, Finding
 
 
-DEFAULT_VERIFIER_MODEL = "openrouter:anthropic/claude-sonnet-4-6"
-"""Sugar resolved by --verifier default. Cross-family from the Gemini-led
-consensus basket (bias resistance). Same OPENROUTER_API_KEY as the reviewer."""
+DEFAULT_VERIFIER_MODEL = "openrouter:moonshotai/kimi-k3"
+"""Sugar resolved by --verifier default: the same single review model (Kimi K3).
+The verifier is an OPTIONAL second pass; pass an explicit `--verifier <model>` to
+judge with a different model for cross-family bias resistance. Same
+OPENROUTER_API_KEY as the reviewer."""
 
 
 class VerdictItem(BaseModel):
@@ -207,7 +209,7 @@ async def run_verifier_pass(
     Args:
       verifier_model: the resolved model spec (passed through resolve_verifier_arg).
       diff_text: the same diff the reviewer saw (post Layer-2 scope filter).
-      kept_findings: findings that survived consensus + Layer-2 filter.
+      kept_findings: findings that survived the Layer-2 scope + date-FP filters.
       budget: same --budget ceiling as the reviewer; verifier prompt is checked
               against it before the LLM call.
 

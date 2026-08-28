@@ -13,10 +13,10 @@ uv tool install --editable D:/agent-tool-pr-reviewer
 Verify:
 
 ```bash
-agent-tool-pr-reviewer --version    # 0.5.3
+agent-tool-pr-reviewer --version    # 0.6.0
 ```
 
-The default model is `openrouter:google/gemini-2.5-pro`, which expects `OPENROUTER_API_KEY` in the environment. See "Recommended models" below for the rationale and alternatives.
+The reviewer runs a **single model: Kimi K3** (`openrouter:moonshotai/kimi-k3`), which expects `OPENROUTER_API_KEY` in the environment. Override with `--model <any-pydantic-ai-model-string>`. See "The model" below for the rationale.
 
 ## Quick start
 
@@ -67,7 +67,8 @@ Reviews HEAD against the resolved base ref.
 | `--budget <tokens>` | `80000` | Refuses with exit 2 if the assembled prompt exceeds this. Heuristic: ~4 chars/token. |
 | `--rules-dir <path>` | walk up from cwd | First `.ai-review/` directory found before hitting `.git/` or filesystem root |
 | `--out <path>` | `<repo>/.ai-review/runs/<ts>/` | When set, suppresses `latest.txt` write |
-| `--model <model-string>` | `openrouter:google/gemini-2.5-pro` | Any Pydantic AI model string (`anthropic:claude-sonnet-4-6`, `openai:gpt-4o`, `ollama:llama3.1`, etc.) OR `openrouter:<model>` to route through OpenRouter (see Configuration). See "Recommended models" below. |
+| `--model <model-string>` | `openrouter:moonshotai/kimi-k3` | Any Pydantic AI model string (`anthropic:claude-sonnet-4-6`, `openai:gpt-4o`, `ollama:llama3.1`, etc.) OR `openrouter:<model>` to route through OpenRouter (see Configuration). See "The model" below. |
+| `--verifier <model>` | off | Optional Layer-3 precision pass on surviving findings. `default` resolves to the review model (Kimi K3); pass a different model for cross-family bias resistance. See "Verifier pass". |
 
 ### `rules list`
 
@@ -186,53 +187,15 @@ agent-tool-pr-reviewer review --model openrouter:google/gemini-2.5-pro
 
 A single `OPENROUTER_API_KEY` covers all of them. The model name shows up in `findings.json`'s `metadata.model` exactly as you typed it (e.g., `openrouter:anthropic/claude-sonnet-4`), so runs across providers stay distinguishable.
 
-## Multi-model consensus mode
+## The model
 
-For higher-precision reviews, run N models in parallel and keep only findings that two or more models flag independently. Convergence is the strongest TP signal we have without a verifier-pass LLM call (see the v0.2.x trial retrospective).
+The reviewer runs **one model** — Kimi K3 (`openrouter:moonshotai/kimi-k3`) by default. Earlier versions (≤ 0.5.x) ran a 3-model "consensus" basket (Gemini 2.5 Pro + Kimi K2.6 + DeepSeek V3.1) and kept only findings ≥ 2 models flagged. In practice that basket kept degrading — Gemini's OpenRouter endpoint returned `finish_reason: error`, DeepSeek returned near-empty responses — so the "consensus" silently collapsed to whichever one model was still answering, and a clean single-model pass was reported as a 3-model agreement. One dependable model, honestly reported, is simpler and more truthful than a basket that quietly falls back.
 
-### Default basket
+Precision is handled by the deterministic filters (scope, date-FP guard) and the optional `--verifier` pass, not by cross-model voting. Override the review model with `--model` (any Pydantic AI model string); for a genuine cross-family second opinion, add `--verifier <a-different-model>`.
 
-```bash
-agent-tool-pr-reviewer review --models default
-```
+## Date-FP guard
 
-`default` expands to the empirically-Pareto-optimal 3-model basket:
-
-1. `openrouter:google/gemini-2.5-pro` — breadth
-2. `openrouter:moonshotai/kimi-k2.6` — precision
-3. `openrouter:deepseek/deepseek-chat-v3.1` — quietness sentinel
-
-Default threshold is `--consensus 2` (a finding must be flagged by ≥2 of the 3 models). Output annotates each surviving finding with `agreement_count` and `agreed_by` in `findings.json` and a `**Agreement:** N/M (flagged by: ...)` line in `review-output.md`.
-
-### Custom basket
-
-```bash
-agent-tool-pr-reviewer review \
-    --models openrouter:google/gemini-2.5-pro,openrouter:anthropic/claude-sonnet-4-6 \
-    --consensus 2
-```
-
-`--consensus 1` keeps every finding (no filtering); `--consensus N` requires unanimous flagging across N models.
-
-### Trial debugging
-
-```bash
-agent-tool-pr-reviewer review --models default --include-uncorroborated
-```
-
-Writes below-threshold findings to `<run-dir>/uncorroborated.json` alongside `findings.json`. Useful for inspecting what each model flagged uniquely.
-
-### Behavior notes
-
-- All N models run in parallel via `asyncio.gather`. Different OpenRouter upstreams = no shared rate limit.
-- If one model fails (timeout, validation, rate limit, network), the run continues with the surviving models; the failure is recorded in `metadata.per_model_usage`. Hard fails only if 0 models succeed.
-- Per-model timeout is 30 minutes (Kimi K2.6 observed at 22 min on 50K-token diffs).
-- `--model` and `--models` are mutually exclusive. The single-model `--model` path is unchanged.
-- `.pr-review-ignore` and `--exclude` apply ONCE before dispatch — all N models see the same filtered diff.
-
-## Date-FP guard (v0.5.3)
-
-`agent-tool-pr-reviewer` v0.5.3 ships a deterministic post-LLM filter that drops "future date / typo" findings whose `evidence` contains a recent ISO date AND whose `description` contains a known future-date/typo keyword. This eliminates the Gemini-style training-cutoff false-positive class — model says "this 2026 date is a typo" about a date the model can't yet know is real — without paying `--verifier default`'s ~$0.05/run.
+A deterministic post-LLM filter drops "future date / typo" findings whose `evidence` contains a recent ISO date AND whose `description` contains a known future-date/typo keyword. This eliminates the training-cutoff false-positive class — the model says "this 2026 date is a typo" about a date past its training cutoff that it can't yet know is real — without paying for a `--verifier` pass.
 
 Two-signal AND gate:
 
@@ -241,13 +204,13 @@ Two-signal AND gate:
 
 Both required → drop. Either alone → keep.
 
-The guard runs once after `consensus.merge_reports()` (or directly after the agent run in single-model mode), BEFORE the verifier. Drops are final; the verifier never re-evaluates a guard-dropped finding. `--include-uncorroborated`'s `uncorroborated.json` passes through unfiltered by design.
+The guard runs once after the agent run (post scope filter), BEFORE the verifier. Drops are final; the verifier never re-evaluates a guard-dropped finding.
 
 ```bash
 # Default: guard ON
 agent-tool-pr-reviewer review
 
-# Opt-out: keep date findings (for users who want to see Gemini's full output)
+# Opt-out: keep date findings (to see the model's full output)
 agent-tool-pr-reviewer review --no-date-guard
 ```
 
@@ -266,11 +229,9 @@ Drops are written to `<run-dir>/dropped-by-date-guard.json`:
 
 `RunMetadata.date_guard_dropped: int` records the count. The stdout summary grows a `_Date-FP guard: dropped N_` row when N > 0; omitted when zero.
 
-Known FN: `consensus._merge_group` keeps the longest evidence quote. If the longest-evidence cluster member lacked the ISO date but a shorter sibling had it, the merged finding loses the date signal — the guard misses. Pinned by `test_asymmetric_merge_fn_pinned`; revisit in v0.5.4+ if real-world data shows this class is meaningful.
+## Verifier pass
 
-## Verifier pass (v0.5.0)
-
-`--verifier MODEL` enables a Layer-3 precision filter that runs after consensus + scope filter. It catches false-positive classes that prompt-side guards and convergence don't fully address:
+`--verifier MODEL` enables a Layer-3 precision filter that runs after the scope + date-FP filters. It catches false-positive classes that prompt-side guards don't fully address:
 
 | Check | Stage | What it catches |
 |---|---|---|
@@ -280,32 +241,29 @@ Known FN: `consensus._merge_group` keeps the longest evidence quote. If the long
 | Speculation at high/blocker | LLM judge | Hedged consequences ("might cause Y") at non-mediums |
 | Scope drift | LLM judge | Findings whose `description` references blocks not in the diff |
 
-Default verifier model is `openrouter:anthropic/claude-sonnet-4-6` — cross-family from the Gemini-led consensus basket for bias resistance. Same `OPENROUTER_API_KEY` as the reviewer; no extra credential.
+`--verifier default` resolves to the review model (Kimi K3). Because that is the same model that produced the findings, `default` is a self-consistency pass — useful, but for a genuine independent second opinion pass a DIFFERENT model, which gives cross-family bias resistance. Same `OPENROUTER_API_KEY` as the reviewer; no extra credential.
 
 ```bash
-# Single-model + verifier
-agent-tool-pr-reviewer review --model openrouter:google/gemini-2.5-pro --verifier default
+# Verifier with the review model (self-consistency)
+agent-tool-pr-reviewer review --verifier default
 
-# Multi-model consensus + verifier (stacked precision)
-agent-tool-pr-reviewer review --models default --verifier default
-
-# Custom verifier model
-agent-tool-pr-reviewer review --models default --verifier openrouter:google/gemini-2.5-flash
+# Verifier with a different model (cross-family bias resistance)
+agent-tool-pr-reviewer review --verifier openrouter:google/gemini-2.5-flash
 ```
 
 When the verifier drops findings, they are written to `<run-dir>/dropped-by-verifier.json` with per-finding `drop_stage` (`"deterministic"` or `"judge"`) and `drop_reason`. The kept findings go to `findings.json` as usual.
 
 `project_rule` category findings skip the LLM judge stage (deterministic gate still applies). The verifier's system prompt does not include rule bodies; judging rule violations as "scope drift" without the rule context would be unsound.
 
-Cost: one Sonnet 4.6 call per run on the surviving bug-category findings. Typical 5–15 finding survivor count: ~1–2k input tokens + ~500 output tokens ≈ $0.02. Add this to your per-run reviewer cost when running with `--verifier default`.
+Cost: one verifier-model call per run on the surviving bug-category findings. Typical 5–15 finding survivor count: ~1–2k input tokens + ~500 output tokens. Add this to your per-run reviewer cost when running with `--verifier`.
 
-`--verifier` is off by default. Drop-only verdicts in v0.5.0 (downgrade and description-rewrite verdicts deferred to v0.5.x).
+`--verifier` is off by default. Drop-only verdicts (downgrade and description-rewrite verdicts are not implemented).
 
 ## Troubleshooting: model tool-use support (v0.5.1)
 
 Some OpenRouter model IDs get routed to provider backends that do not support function/tool calling. Pydantic-AI's structured output requires tools, so those routings fail with `404 — "No endpoints found that support tool use."` mid-run.
 
-`agent-tool-pr-reviewer` v0.5.1 auto-runs a tiny tool-use probe on each resolved model (reviewer + every basket member + optional verifier) before the real review dispatches. Detected incompatibilities exit 2 with an actionable error; the reviewer never runs and no tokens are wasted.
+The reviewer auto-runs a tiny tool-use probe on the resolved model (reviewer + optional verifier) before the real review dispatches. Detected incompatibilities exit 2 with an actionable error; the reviewer never runs and no tokens are wasted.
 
 Known-incompatible model IDs are denylisted (zero-token short-circuit):
 
@@ -332,15 +290,11 @@ agent-tool-pr-reviewer review --skip-precheck --model openrouter:experimental/ne
 
 The probe adds ~1-3 s of latency on a clean run (probes are parallel via `asyncio.gather`).
 
-## Recommended models
+## Changing the model
 
-Two trials (16 distinct models, 39 successful runs across 4 chorus-sqlserver PRs) produced this preference order — both for single-model use and for the eventual Tier 2 consensus mode:
+The default is Kimi K3 (`openrouter:moonshotai/kimi-k3`) — a strong, dependable code reviewer that (unlike the endpoints in the retired consensus basket) answers reliably. Override per-run with `--model <any-pydantic-ai-model-string>`; the string is recorded verbatim in `findings.json`'s `metadata.model`, so runs across models stay distinguishable.
 
-1. **`openrouter:google/gemini-2.5-pro`** — *default*. Caught both real bugs across the trials (`:r` regex in trial 1, error-message wording in trial 1) at ~$0.06/run. Has one known FP class (scope-misalignment on generated fixtures) that the deferred Tier 2 scope filter will eliminate.
-2. **`openrouter:moonshotai/kimi-k2.6`** — precision pick. 1 TP, 0 FPs across 4 PRs at ~$0.06/run. Slow on large diffs (up to ~22 min on a 50K-token diff), so a poor fit for interactive use but well-suited to CI and consensus mode.
-3. **`openrouter:deepseek/deepseek-chat-v3.1`** — quietness sentinel. 0 TPs, 0 FPs at ~$0.006/run. Useless as a primary reviewer, valuable in a basket: when DeepSeek does emit a finding, it's worth a closer look because it almost never speaks.
-
-The retrospective with full data is in [`D:/ai-agents/CONTRIBUTING.md`](https://github.com/PatientVibes/ai-agents/blob/master/CONTRIBUTING.md) under the agent-tool-pr-reviewer section. **Models that did NOT make the cut** despite costing more or being marketed for code: Claude Sonnet 4.6, Claude Opus 4.7, GPT-5, GPT-5-mini, Codestral 2508, Qwen3 Coder 480B, GLM 4.6, Grok Code Fast 1, MiniMax M2.7, Llama 4 Maverick (architecturally unusable), DeepSeek R1 Distill (architecturally unusable).
+Historical trial data that motivated the earlier model picks lives in [`D:/ai-agents/CONTRIBUTING.md`](https://github.com/PatientVibes/ai-agents/blob/master/CONTRIBUTING.md) under the agent-tool-pr-reviewer section. Two model IDs are denylisted as tool-use-incompatible (`meta-llama/llama-4-maverick`, `deepseek/deepseek-r1-distill-qwen-32b`) — see the precheck section.
 
 ## Troubleshooting
 
@@ -363,7 +317,7 @@ The retrospective with full data is in [`D:/ai-agents/CONTRIBUTING.md`](https://
 Deferred deliberately:
 
 - **GitHub PR mode** (`--pr <num>`, `gh` integration) — local branch only.
-- **Verifier / evaluator-optimizer pass** — single LLM call, no second-pass grounding.
+- **Multi-model consensus** — retired in 0.6.0 (see "The model"); one dependable model + the verifier pass instead.
 - **Security findings** — covered by Anthropic's `/security-review` slash command. Out of scope here.
 - **API/contract-breaking-change, doc-drift, test-coverage categories.**
 - **Auto-chunking for oversized diffs** — refuse with exit 2.
@@ -382,7 +336,7 @@ uv sync --extra dev
 uv run pytest -v
 ```
 
-63 tests across 8 modules: schema, paths, rules, diff, prompt, render, agent, CLI smoke. Tests use Pydantic AI's `TestModel` for deterministic LLM stubbing.
+156 tests: schema, paths, rules, diff, prompt, render, agent, date-FP guard, verifier, compat/precheck, and CLI smoke. Tests use Pydantic AI's `TestModel` for deterministic LLM stubbing — no network.
 
 ## Architecture
 

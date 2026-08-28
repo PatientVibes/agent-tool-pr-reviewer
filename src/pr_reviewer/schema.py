@@ -8,19 +8,6 @@ Severity = Literal["blocker", "high", "medium", "low"]
 Category = Literal["bug", "project_rule"]
 
 
-class ModelUsage(BaseModel):
-    """Per-model token usage and error state in a multi-model consensus run.
-
-    Populated once per model in the basket. `errored=True` means the model's
-    agent call failed (timeout, validation, rate limit, network); `error_message`
-    captures the exception's `repr()` for postmortem.
-    """
-    tokens_input: int
-    tokens_output: int
-    errored: bool = False
-    error_message: str | None = None
-
-
 class Finding(BaseModel):
     category: Category
     severity: Severity
@@ -32,8 +19,6 @@ class Finding(BaseModel):
     description: str
     evidence: str = Field(min_length=1, max_length=500)
     suggested_fix: str | None = None
-    agreement_count: int | None = None
-    agreed_by: list[str] | None = None
 
     @model_validator(mode="after")
     def _rule_id_matches_category(self) -> "Finding":
@@ -57,8 +42,6 @@ class RunMetadata(BaseModel):
     model: str
     tokens_input: int
     tokens_output: int
-    models: list[str] | None = None
-    per_model_usage: dict[str, ModelUsage] | None = None
     verifier_model: str | None = None
     date_guard_dropped: int = 0
 

@@ -1,7 +1,7 @@
 [project]
 name = "agent-tool-pr-reviewer"
-version = "0.5.4"
-description = "AI-driven pull request reviewer producing typed findings.json + review-output.md"
+version = "0.6.0"
+description = "Single-model AI pull-request reviewer producing typed findings.json + review-output.md"
 authors = [{ name = "Chris Moore", email = "chris.paul.moore@gmail.com" }]
 requires-python = ">=3.11"
 dependencies = [

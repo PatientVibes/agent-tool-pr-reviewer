@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.0 — 2026-08-28
+
+**Single-model reviewer (Kimi K3).** Removed multi-model consensus entirely. The 3-model basket (Gemini 2.5 Pro + Kimi K2.6 + DeepSeek V3.1, keep-if-≥2) kept degrading in practice — Gemini's OpenRouter endpoint returned `finish_reason: error`, DeepSeek returned near-empty responses — so "consensus" silently collapsed to whichever one model still answered, and a clean single-model pass was reported as a 3-model agreement. One dependable model, honestly reported, replaces it. **Breaking.**
+
+- **CHANGED**: the review runs a single model. Default is now `openrouter:moonshotai/kimi-k3` (was `openrouter:google/gemini-2.5-pro`). Override with `--model`.
+- **REMOVED**: `--models`, `--consensus`, `--include-uncorroborated` flags; the `consensus.py` module (`DEFAULT_BASKET`, `resolve_models_arg`, `merge_reports`, `PerModelResult`); `run_multi_model_review_command` / `_dispatch_one_model`; the 30-min per-model timeout; the `[consensus] …` / `Multi-model consensus (n/n …)` / `Convergence:` stderr output; the `uncorroborated.json` sidecar.
+- **REMOVED (schema)**: `ModelUsage` submodel; `RunMetadata.models`, `RunMetadata.per_model_usage`; `Finding.agreement_count`, `Finding.agreed_by`; the `**Agreement:** N/M` render block. `schema_version` stays `"3"` — the removed fields were all optional (nullable), so a `"3"` report without them is still schema-valid.
+- **CHANGED**: `--verifier default` now resolves to the review model (Kimi K3) — a self-consistency pass. Pass an explicit `--verifier <other-model>` for a genuine cross-family second opinion. The verifier itself is unchanged and still off by default.
+- **DOCS**: README rewritten for single-model; added `CLAUDE.md` and `ISSUES-AND-FEATURES.md`; removed stale `.venv-broken-901/` / `.smoke/`; `.gitignore` now anchors `.venv*/`.
+- **Tests**: removed the consensus/multi-model suites (`test_consensus.py`, `test_cli_multi_model_smoke.py`, `test_cli_verifier_multi_model_smoke.py`, `test_schema_v3.py`, `test_render_v3.py`) and the one multi-model precheck case. Total: 156 tests, all green.
+
 ## 0.5.3 — 2026-05-14
 
 **Feature: date-FP guard.** New deterministic post-LLM filter drops "future date / typo" findings whose evidence contains an ISO date in `(today - 730 days, today)` AND whose description contains a known future-date/typo keyword. Eliminates the Gemini training-cutoff false-positive class without paying `--verifier default`'s ~$0.05/run.

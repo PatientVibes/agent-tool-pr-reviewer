@@ -1,8 +1,8 @@
 """Deterministic post-LLM filter that drops "future date / typo" model false positives.
 
-Pipeline position: between consensus.merge_reports() and the verifier (or, in
-single-model mode, between the agent's report and the renderer). Drops are
-final; the verifier never re-evaluates a guard-dropped finding.
+Pipeline position: between the model's report (after the Layer-2 scope filter)
+and the verifier. Drops are final; the verifier never re-evaluates a
+guard-dropped finding.
 
 Detection: two-signal AND gate.
   1. evidence contains an ISO-8601 date in (today - 730 days, today)

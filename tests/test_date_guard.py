@@ -125,28 +125,27 @@ def test_empty_description_keep():
     assert is_date_fp(f, TODAY) is None
 
 
-# --- Asymmetric-evidence merge cases (consensus._merge_group at consensus.py:162) ---
+# --- Asymmetric evidence/description cases ---
 
-def test_asymmetric_merge_fn_pinned():
-    """When consensus keeps longest_evidence and the longest lacks the date,
-    the guard misses (FN). This pins the behavior so a future refactor that
-    changes _merge_group can revisit. See spec R2.
+def test_evidence_without_date_keeps_even_with_keyword():
+    """The date signal is read from EVIDENCE, not the description. Evidence with
+    no ISO date → the guard cannot fire, even when the description carries a
+    future-date keyword. Pins that the two signals are AND-ed on the right fields.
     """
-    # Simulate the merged finding: longest evidence (no date) + concatenated description (has keyword)
     f = _finding(
         evidence="This is a very long evidence string without any ISO date in it at all whatsoever for the test.",
-        description="[gemini]: This is a future date typo.\n\n[kimi]: Date 2026-05-09 looks wrong.",
+        description="This is a future date typo. Date 2026-05-09 looks wrong.",
     )
-    # No date in evidence → date signal fails → keep (FN).
+    # No date in evidence → date signal fails → keep.
     assert is_date_fp(f, TODAY) is None
 
 
-def test_reverse_asymmetric_drop_fires():
-    """Mirror case: longest evidence has the date; concatenated description has the keyword.
-    Drop should fire — the description-concat path is honored."""
+def test_evidence_date_plus_description_keyword_drops():
+    """Mirror case: evidence has the recent ISO date and the description has the
+    keyword — the drop fires."""
     f = _finding(
         evidence="The longest evidence string also happens to mention 2026-05-09 prominently.",
-        description="[gemini]: Generic concern.\n\n[kimi]: This is a future date.",
+        description="Generic concern. This is a future date.",
     )
     decision = is_date_fp(f, TODAY)
     assert decision is not None
