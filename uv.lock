@@ -8,6 +8,7 @@ version = "0.6.0"
 source = { editable = "." }
 dependencies = [
     { name = "anthropic" },
+    { name = "opentelemetry-api" },
     { name = "pathspec" },
     { name = "pydantic" },
     { name = "pydantic-ai-slim", extra = ["anthropic", "openai"] },
@@ -23,6 +24,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "anthropic", specifier = ">=0.61,<0.70" },
+    { name = "opentelemetry-api", specifier = ">=1.30,<1.42" },
     { name = "pathspec", specifier = ">=0.12,<1" },
     { name = "pydantic", specifier = ">=2.7,<3" },
     { name = "pydantic-ai-slim", extras = ["anthropic", "openai"], specifier = ">=0.8,<0.9" },
